@@ -25,26 +25,34 @@ class AttendanceController extends Controller
         $currentUser = $request->user();
         $currentDateTime = now();
 
+        // Check if already checked in today
+        $existingAttendance = Attendance::where('user_id', $currentUser->id)
+            ->whereDate('date', $currentDateTime->toDateString())
+            ->first();
+
+        if ($existingAttendance) {
+            return response(['message' => 'Anda sudah melakukan absen masuk hari ini.'], 400);
+        }
+
         $workMode = $request->input('work_mode', $currentUser->work_mode ?? 'wfo');
-        $officeId = null;
+        $companyId = $currentUser->company_id;
 
         if ($workMode === 'wfo') {
             $userLat = $request->latitude;
             $userLon = $request->longitude;
 
             $isWithinRadius = false;
-            $companyId = null;
 
-            if ($currentUser->company_id) {
-                $company = \App\Models\Company::find($currentUser->company_id);
+            if ($companyId) {
+                $company = \App\Models\Company::find($companyId);
                 if ($company && $company->latitude && $company->longitude && $company->radius_km) {
                     $distance = $this->calculateDistance($userLat, $userLon, $company->latitude, $company->longitude);
                     if ($distance <= $company->radius_km) {
                         $isWithinRadius = true;
-                        $companyId = $company->id;
                     }
                 }
             } else {
+                // If user doesn't have a specific company, check all companies
                 $companies = \App\Models\Company::all();
                 if ($companies->count() > 0) {
                     foreach ($companies as $company) {
@@ -58,6 +66,7 @@ class AttendanceController extends Controller
                         }
                     }
                 } else {
+                    // No companies defined, allow checkin
                     $isWithinRadius = true;
                 }
             }
@@ -107,20 +116,20 @@ class AttendanceController extends Controller
             }
         }
 
-        $attendance = new Attendance;
-        $attendance->user_id = $currentUser->id;
-        $attendance->shift_id = $activeShift?->id;
-        $attendance->company_id = $companyId;
-        $attendance->date = $currentDateTime->toDateString();
-        $attendance->time_in = $currentDateTime->toTimeString();
-        $attendance->latlon_in = $request->latitude.','.$request->longitude;
-        $attendance->status = $status;
-        $attendance->work_mode = $workMode;
-        $attendance->is_weekend = $isWeekend;
-        $attendance->is_holiday = $isHoliday;
-        $attendance->holiday_work = $activeShift ? ($isWeekend || $isHoliday) : false;
-        $attendance->late_minutes = $lateMinutes;
-        $attendance->save();
+        $attendance = Attendance::create([
+            'user_id' => $currentUser->id,
+            'shift_id' => $activeShift?->id,
+            'company_id' => $companyId,
+            'date' => $currentDateTime->toDateString(),
+            'time_in' => $currentDateTime->toTimeString(),
+            'latlon_in' => $request->latitude.','.$request->longitude,
+            'status' => $status,
+            'work_mode' => $workMode,
+            'is_weekend' => $isWeekend,
+            'is_holiday' => $isHoliday,
+            'holiday_work' => $activeShift ? ($isWeekend || $isHoliday) : false,
+            'late_minutes' => $lateMinutes,
+        ]);
 
         return response([
             'message' => 'Checkin success',
