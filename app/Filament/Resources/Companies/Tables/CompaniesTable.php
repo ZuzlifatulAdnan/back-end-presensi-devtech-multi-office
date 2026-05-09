@@ -16,21 +16,25 @@ class CompaniesTable
         return $table
             ->columns([
                 TextColumn::make('name')
+                    ->label('Nama Kantor')
                     ->searchable()
                     ->weight('bold'),
                 TextColumn::make('address')
+                    ->label('Alamat')
                     ->limit(30)
                     ->searchable(),
                 TextColumn::make('radius_km')
+                    ->label('Radius')
                     ->numeric()
                     ->sortable()
                     ->suffix(' km'),
                 TextColumn::make('attendance_type')
+                    ->label('Metode Presensi')
                     ->badge()
                     ->formatStateUsing(fn (string $state): string => match ($state) {
-                        'location_based_only' => 'Location Based',
-                        'face_recognition_only' => 'Face Recognition',
-                        'hybrid' => 'Hybrid',
+                        'location_based_only' => 'Berbasis Lokasi (GPS)',
+                        'face_recognition_only' => 'Pengenalan Wajah',
+                        'hybrid' => 'Hybrid (GPS + Wajah)',
                         default => $state,
                     }),
             ])

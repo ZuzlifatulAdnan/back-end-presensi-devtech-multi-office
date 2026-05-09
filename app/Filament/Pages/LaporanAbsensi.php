@@ -42,13 +42,15 @@ class LaporanAbsensi extends Page implements HasTable
                     ->sortable()
                     ->searchable(),
 
-                TextColumn::make('user.position')
+                TextColumn::make('user.jabatan.name')
                     ->label('Jabatan')
-                    ->sortable(),
+                    ->sortable()
+                    ->placeholder('-'),
 
-                TextColumn::make('user.department')
+                TextColumn::make('user.departemen.name')
                     ->label('Departemen')
-                    ->sortable(),
+                    ->sortable()
+                    ->placeholder('-'),
 
                 TextColumn::make('date')
                     ->label('Tanggal')
@@ -98,6 +100,19 @@ class LaporanAbsensi extends Page implements HasTable
                         'Belum Pulang' => 'warning',
                         'Tidak Masuk' => 'danger',
                     }),
+                TextColumn::make('work_mode')
+                    ->label('Mode Kerja')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state): string => strtoupper($state))
+                    ->color(fn (string $state): string => match ($state) {
+                        'wfo' => 'success',
+                        'wfh' => 'warning',
+                        'wfa' => 'info',
+                        default => 'gray',
+                    }),
+                TextColumn::make('company.name')
+                    ->label('Kantor / Lokasi')
+                    ->placeholder('Pusat'),
             ])
             ->filters([
                 Filter::make('date_range')
@@ -155,6 +170,18 @@ class LaporanAbsensi extends Page implements HasTable
                         now()->endOfMonth(),
                     ]))
                     ->toggle(),
+                SelectFilter::make('work_mode')
+                    ->label('Mode Kerja')
+                    ->options([
+                        'wfo' => 'WFO',
+                        'wfh' => 'WFH',
+                        'wfa' => 'WFA',
+                    ]),
+                SelectFilter::make('company_id')
+                    ->label('Kantor / Lokasi')
+                    ->relationship('company', 'name')
+                    ->searchable()
+                    ->preload(),
             ])
             ->actions([
                 Action::make('detail')
@@ -194,7 +221,7 @@ class LaporanAbsensi extends Page implements HasTable
                 ->color('success')
                 ->action(function () {
                     $query = $this->getFilteredTableQuery();
-                    $attendances = $query->with(['user'])->get();
+                    $attendances = $query->with(['user', 'company'])->get();
 
                     // Create PDF using blade view
                     $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('filament.pages.laporan-absensi-pdf', [
@@ -227,7 +254,7 @@ class LaporanAbsensi extends Page implements HasTable
 
                     // Create CSV content with BOM for proper UTF-8 encoding in Excel
                     $csvData = "\xEF\xBB\xBF"; // UTF-8 BOM
-                    $csvData .= "No,Nama Karyawan,Jabatan,Departemen,Tanggal,Jam Masuk,Jam Keluar,Jam Kerja,Status\n";
+                    $csvData .= "No,Nama Karyawan,Jabatan,Departemen,Tanggal,Jam Masuk,Jam Keluar,Jam Kerja,Mode Kerja,Kantor/Lokasi,Status\n";
 
                     foreach ($attendances as $index => $attendance) {
                         $timeIn = $attendance->time_in ? Carbon::parse($attendance->time_in)->format('H:i') : '-';
@@ -248,15 +275,17 @@ class LaporanAbsensi extends Page implements HasTable
 
                         // Properly escape CSV fields
                         $csvData .= sprintf(
-                            "%d,\"%s\",\"%s\",\"%s\",%s,%s,%s,\"%s\",%s\n",
+                            "%d,\"%s\",\"%s\",\"%s\",%s,%s,%s,\"%s\",\"%s\",\"%s\",%s\n",
                             $index + 1,
                             str_replace('"', '""', $attendance->user->name),
-                            str_replace('"', '""', $attendance->user->position ?? '-'),
-                            str_replace('"', '""', $attendance->user->department ?? '-'),
+                            str_replace('"', '""', $attendance->user->jabatan->name ?? '-'),
+                            str_replace('"', '""', $attendance->user->departemen->name ?? '-'),
                             Carbon::parse($attendance->date)->format('d/m/Y'),
                             $timeIn,
                             $timeOut,
                             str_replace('"', '""', $workingHours),
+                            strtoupper($attendance->work_mode ?? 'WFO'),
+                            str_replace('"', '""', $attendance->company->name ?? 'Pusat'),
                             $status
                         );
                     }
@@ -273,8 +302,8 @@ class LaporanAbsensi extends Page implements HasTable
     protected function getTableQuery(): Builder
     {
         return Attendance::query()
-            ->with(['user:id,name,position,department'])
-            ->select('id', 'user_id', 'date', 'time_in', 'time_out', 'latlon_in', 'latlon_out', 'created_at', 'updated_at')
+            ->with(['user:id,name,jabatan_id,departemen_id', 'user.jabatan', 'user.departemen', 'company:id,name'])
+            ->select('id', 'user_id', 'company_id', 'date', 'time_in', 'time_out', 'work_mode', 'latlon_in', 'latlon_out', 'created_at', 'updated_at')
             ->orderBy('date', 'desc');
     }
 

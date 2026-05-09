@@ -13,8 +13,10 @@ class JabatanForm
         return $schema
             ->components([
                 TextInput::make('name')
+                    ->label('Nama Jabatan')
                     ->required(),
                 Textarea::make('description')
+                    ->label('Deskripsi')
                     ->default(null)
                     ->columnSpanFull(),
             ]);

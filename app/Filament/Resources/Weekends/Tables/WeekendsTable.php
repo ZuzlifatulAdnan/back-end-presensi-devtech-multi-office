@@ -20,15 +20,15 @@ class WeekendsTable
         return $table
             ->columns([
                 TextColumn::make('date')
-                    ->label('Date')
+                    ->label('Tanggal')
                     ->date('d/m/Y (D)')
                     ->sortable()
                     ->badge()
                     ->color('gray'),
 
                 TextColumn::make('name')
-                    ->label('Name')
-                    ->default('Weekend'),
+                    ->label('Nama')
+                    ->default('Hari Libur Akhir Pekan'),
 
                 TextColumn::make('created_at')
                     ->label('Generated At')
@@ -38,7 +38,7 @@ class WeekendsTable
             ])
             ->filters([
                 SelectFilter::make('year')
-                    ->label('Year')
+                    ->label('Tahun')
                     ->options(function () {
                         $years = DB::table('holidays')
                             ->where('type', 'weekend')
@@ -67,7 +67,7 @@ class WeekendsTable
             ])
             ->headerActions([
                 Action::make('generate_weekends')
-                    ->label('Generate Weekends')
+                    ->label('Buat Hari Libur Akhir Pekan')
                     ->icon('heroicon-o-calendar-days')
                     ->color('success')
                     ->form([

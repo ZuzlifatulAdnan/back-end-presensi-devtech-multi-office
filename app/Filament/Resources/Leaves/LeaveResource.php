@@ -21,11 +21,15 @@ class LeaveResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-calendar-days';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Leave Management';
+    protected static UnitEnum|string|null $navigationGroup = 'Manajemen Cuti';
 
-    protected static ?string $navigationLabel = 'Leave Requests';
+    protected static ?string $navigationLabel = 'Pengajuan Cuti';
 
-    protected static ?string $pluralLabel = 'Leave Requests';
+    protected static ?string $modelLabel = 'Pengajuan Cuti';
+
+    protected static ?string $pluralModelLabel = 'Pengajuan Cuti';
+
+    protected static ?string $pluralLabel = 'Pengajuan Cuti';
 
     protected static ?int $navigationSort = 40;
 

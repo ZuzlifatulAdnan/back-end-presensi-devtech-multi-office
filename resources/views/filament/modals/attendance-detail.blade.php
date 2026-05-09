@@ -44,6 +44,20 @@
             <p class="text-sm text-gray-900 dark:text-gray-100">{{ $timeOut }}</p>
         </div>
 
+        <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Mode Kerja
+            </label>
+            <p class="text-sm text-gray-900 dark:text-gray-100">{{ strtoupper($record->work_mode ?? 'WFO') }}</p>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Kantor / Lokasi
+            </label>
+            <p class="text-sm text-gray-900 dark:text-gray-100">{{ $record->company->name ?? 'Pusat' }}</p>
+        </div>
+
         <div class="col-span-2">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Total Jam Kerja

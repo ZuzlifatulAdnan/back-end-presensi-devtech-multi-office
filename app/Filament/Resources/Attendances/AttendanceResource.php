@@ -23,6 +23,12 @@ class AttendanceResource extends Resource
 
     protected static ?int $navigationSort = 30;
 
+    protected static ?string $navigationLabel = 'Data Absensi';
+
+    protected static ?string $modelLabel = 'Absensi';
+
+    protected static ?string $pluralModelLabel = 'Absensi';
+
     public static function form(Schema $schema): Schema
     {
         return AttendanceForm::configure($schema);

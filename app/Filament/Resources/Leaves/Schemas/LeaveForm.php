@@ -17,10 +17,10 @@ class LeaveForm
     {
         return $schema
             ->components([
-                Section::make('Leave Information')
+                Section::make('Informasi Cuti')
                     ->schema([
                         Select::make('employee_id')
-                            ->label('Employee')
+                            ->label('Pegawai')
                             ->required()
                             ->searchable()
                             ->relationship('employee', 'name')
@@ -28,14 +28,14 @@ class LeaveForm
                             ->default(auth()->id()),
 
                         Select::make('leave_type_id')
-                            ->label('Leave Type')
+                            ->label('Jenis Cuti')
                             ->required()
                             ->searchable()
                             ->relationship('leaveType', 'name')
                             ->preload(),
 
                         DatePicker::make('start_date')
-                            ->label('Start Date')
+                            ->label('Tanggal Mulai')
                             ->required()
                             ->native(false)
                             ->reactive()
@@ -44,7 +44,7 @@ class LeaveForm
                             }),
 
                         DatePicker::make('end_date')
-                            ->label('End Date')
+                            ->label('Tanggal Selesai')
                             ->required()
                             ->native(false)
                             ->reactive()
@@ -53,13 +53,13 @@ class LeaveForm
                             }),
 
                         Select::make('total_days')
-                            ->label('Total Days')
+                            ->label('Total Hari')
                             ->disabled()
                             ->dehydrated()
                             ->default(1),
 
                         Textarea::make('reason')
-                            ->label('Reason')
+                            ->label('Alasan')
                             ->rows(3)
                             ->columnSpanFull(),
                     ])
@@ -77,21 +77,21 @@ class LeaveForm
                 //             ->columnSpanFull(),
                 //     ]),
 
-                Section::make('Approval Status')
+                Section::make('Status Persetujuan')
                     ->schema([
                         Select::make('status')
                             ->label('Status')
                             ->options([
-                                'pending' => 'Pending',
-                                'approved' => 'Approved',
-                                'rejected' => 'Rejected',
+                                'pending' => 'Menunggu',
+                                'approved' => 'Disetujui',
+                                'rejected' => 'Ditolak',
                             ])
                             ->default('pending')
                             ->disabled(fn ($record) => $record === null)
                             ->visible(fn () => auth()->user()->role === 'admin' || auth()->user()->role === 'hr'),
 
                         Textarea::make('notes')
-                            ->label('Notes')
+                            ->label('Catatan')
                             ->rows(2)
                             ->columnSpanFull()
                             ->visible(fn () => auth()->user()->role === 'admin' || auth()->user()->role === 'hr'),

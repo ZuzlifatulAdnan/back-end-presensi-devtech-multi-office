@@ -20,11 +20,15 @@ class ShiftKerjaResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-clock';
 
-    protected static UnitEnum|string|null $navigationGroup = 'User Management';
+    protected static UnitEnum|string|null $navigationGroup = 'Manajemen Pengguna';
 
     protected static ?int $navigationSort = 2;
 
-    protected static ?string $navigationLabel = 'Work Shifts';
+    protected static ?string $navigationLabel = 'Shift Kerja';
+
+    protected static ?string $modelLabel = 'Shift Kerja';
+
+    protected static ?string $pluralModelLabel = 'Shift Kerja';
 
     public static function form(Schema $schema): Schema
     {

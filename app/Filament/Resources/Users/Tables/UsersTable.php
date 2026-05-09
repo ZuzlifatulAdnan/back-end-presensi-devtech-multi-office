@@ -30,6 +30,7 @@ class UsersTable
                     '))
                     ->size(50),
                 TextColumn::make('name')
+                    ->label('Nama')
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('email')
@@ -39,12 +40,19 @@ class UsersTable
                 TextColumn::make('phone')
                     ->searchable(),
                 TextColumn::make('role')
+                    ->label('Peran')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'admin' => 'danger',
                         'manager' => 'warning',
                         'employee' => 'success',
                         default => 'gray',
+                    })
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'admin' => 'Admin',
+                        'manager' => 'Manajer',
+                        'employee' => 'Karyawan',
+                        default => $state,
                     })
                     ->searchable(),
                 TextColumn::make('work_mode')
@@ -97,19 +105,32 @@ class UsersTable
             ])
             ->filters([
                 SelectFilter::make('role')
+                    ->label('Peran')
                     ->options([
                         'admin' => 'Admin',
-                        'manager' => 'Manager',
-                        'employee' => 'Employee',
+                        'manager' => 'Manajer',
+                        'employee' => 'Karyawan',
                     ]),
-                SelectFilter::make('department')
-                    ->options(function () {
-                        return \App\Models\User::distinct()
-                            ->whereNotNull('department')
-                            ->pluck('department', 'department')
-                            ->toArray();
-                    })
-                    ->searchable(),
+                SelectFilter::make('jabatan_id')
+                    ->label('Jabatan')
+                    ->relationship('jabatan', 'name')
+                    ->searchable()
+                    ->preload(),
+                SelectFilter::make('departemen_id')
+                    ->label('Departemen')
+                    ->relationship('departemen', 'name')
+                    ->searchable()
+                    ->preload(),
+                SelectFilter::make('shift_kerja_id')
+                    ->label('Shift Kerja')
+                    ->relationship('shiftKerja', 'name')
+                    ->searchable()
+                    ->preload(),
+                SelectFilter::make('company_id')
+                    ->label('Lokasi / Kantor')
+                    ->relationship('company', 'name')
+                    ->searchable()
+                    ->preload(),
             ])
             ->recordActions([
                 ViewAction::make(),

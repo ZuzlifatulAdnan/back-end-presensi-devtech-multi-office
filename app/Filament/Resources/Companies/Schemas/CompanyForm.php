@@ -15,29 +15,29 @@ class CompanyForm
     {
         return $schema
             ->components([
-                Section::make('Company Information')
+                Section::make('Informasi Kantor')
                     ->schema([
                         TextInput::make('name')
-                            ->label('Company Name')
+                            ->label('Nama Kantor')
                             ->required()
                             ->maxLength(255),
 
                         TextInput::make('email')
-                            ->label('Email Address')
+                            ->label('Alamat Email')
                             ->email()
                             ->required()
                             ->maxLength(255),
 
                         Textarea::make('address')
-                            ->label('Address')
+                            ->label('Alamat Lengkap')
                             ->required()
                             ->rows(3)
                             ->columnSpanFull(),
                     ])
                     ->columns(2),
 
-                Section::make('Location Settings')
-                    ->description('Configure GPS location validation for attendance')
+                Section::make('Pengaturan Lokasi')
+                    ->description('Konfigurasi validasi lokasi GPS untuk presensi')
                     ->schema([
                         Grid::make(3)
                             ->schema([
@@ -46,14 +46,14 @@ class CompanyForm
                                     ->required()
                                     ->numeric()
                                     ->placeholder('-6.200000')
-                                    ->helperText('Office GPS latitude coordinate'),
+                                    ->helperText('Koordinat latitude kantor'),
 
                                 TextInput::make('longitude')
                                     ->label('Longitude')
                                     ->required()
                                     ->numeric()
                                     ->placeholder('106.816666')
-                                    ->helperText('Office GPS longitude coordinate'),
+                                    ->helperText('Koordinat longitude kantor'),
 
                                 TextInput::make('radius_km')
                                     ->label('Radius (km)')
@@ -63,19 +63,19 @@ class CompanyForm
                                     ->step(0.1)
                                     ->minValue(0.1)
                                     ->maxValue(10)
-                                    ->helperText('Allowed check-in radius'),
+                                    ->helperText('Radius check-in yang diizinkan'),
                             ]),
 
                         Select::make('attendance_type')
-                            ->label('Attendance Method')
+                            ->label('Metode Presensi')
                             ->required()
                             ->options([
-                                'location_based_only' => 'Location Based Only (GPS)',
-                                'face_recognition_only' => 'Face Recognition Only',
-                                'hybrid' => 'Hybrid (GPS + Face Recognition)',
+                                'location_based_only' => 'Hanya Lokasi (GPS)',
+                                'face_recognition_only' => 'Hanya Pengenalan Wajah',
+                                'hybrid' => 'Hybrid (GPS + Pengenalan Wajah)',
                             ])
                             ->default('location_based_only')
-                            ->helperText('Choose how employees check in/out')
+                            ->helperText('Pilih bagaimana pegawai melakukan absen masuk/pulang')
                             ->native(false),
                     ]),
             ]);

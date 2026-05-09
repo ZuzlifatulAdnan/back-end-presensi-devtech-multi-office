@@ -20,29 +20,29 @@ class LeaveBalancesTable
         return $table
             ->columns([
                 TextColumn::make('employee.name')
-                    ->label('Employee')
+                    ->label('Pegawai')
                     ->sortable()
                     ->searchable(),
 
                 TextColumn::make('leaveType.name')
-                    ->label('Leave Type')
+                    ->label('Jenis Cuti')
                     ->sortable()
                     ->searchable(),
 
                 TextColumn::make('year')
-                    ->label('Year')
+                    ->label('Tahun')
                     ->sortable(),
 
                 TextColumn::make('quota_days')
-                    ->label('Quota Days')
+                    ->label('Kuota Hari')
                     ->sortable(),
 
                 TextColumn::make('used_days')
-                    ->label('Used Days')
+                    ->label('Terpakai')
                     ->sortable(),
 
                 TextColumn::make('remaining_days')
-                    ->label('Remaining Days')
+                    ->label('Sisa Hari')
                     ->sortable()
                     ->color(fn ($state) => $state <= 0 ? 'danger' : ($state <= 3 ? 'warning' : 'success')),
 
@@ -51,24 +51,24 @@ class LeaveBalancesTable
                 //     ->sortable(),
 
                 TextColumn::make('last_updated')
-                    ->label('Last Updated')
+                    ->label('Terakhir Diperbarui')
                     ->dateTime('d/m/Y H:i')
                     ->sortable()
                     ->placeholder('-'),
             ])
             ->filters([
                 SelectFilter::make('employee_id')
-                    ->label('Employee')
+                    ->label('Pegawai')
                     ->relationship('employee', 'name')
                     ->searchable(),
 
                 SelectFilter::make('leave_type_id')
-                    ->label('Leave Type')
+                    ->label('Jenis Cuti')
                     ->relationship('leaveType', 'name')
                     ->searchable(),
 
                 SelectFilter::make('year')
-                    ->label('Year')
+                    ->label('Tahun')
                     ->options(function () {
                         $currentYear = now()->year;
 

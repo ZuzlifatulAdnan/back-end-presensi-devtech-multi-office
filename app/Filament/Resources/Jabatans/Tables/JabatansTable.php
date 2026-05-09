@@ -15,6 +15,7 @@ class JabatansTable
         return $table
             ->columns([
                 TextColumn::make('name')
+                    ->label('Nama Jabatan')
                     ->searchable(),
                 TextColumn::make('created_at')
                     ->dateTime()

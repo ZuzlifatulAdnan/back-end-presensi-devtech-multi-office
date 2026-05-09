@@ -24,7 +24,11 @@ class DepartemenResource extends Resource
 
     protected static ?int $navigationSort = 51;
 
-    protected static ?string $navigationLabel = 'Departments';
+    protected static ?string $navigationLabel = 'Departemen';
+
+    protected static ?string $modelLabel = 'Departemen';
+
+    protected static ?string $pluralModelLabel = 'Departemen';
 
     public static function form(Schema $schema): Schema
     {

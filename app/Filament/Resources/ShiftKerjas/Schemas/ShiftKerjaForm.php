@@ -16,46 +16,46 @@ class ShiftKerjaForm
     {
         return $schema
             ->components([
-                Section::make('Shift Information')
+                Section::make('Informasi Shift')
                     ->schema([
                         TextInput::make('name')
-                            ->label('Shift Name')
+                            ->label('Nama Shift')
                             ->required()
-                            ->placeholder('e.g., Morning Shift, Night Shift')
+                            ->placeholder('Contoh: Shift Pagi, Shift Malam')
                             ->maxLength(255),
 
                         Grid::make(2)
                             ->schema([
                                 TimePicker::make('start_time')
-                                    ->label('Start Time')
+                                    ->label('Jam Mulai')
                                     ->required()
                                     ->seconds(false),
 
                                 TimePicker::make('end_time')
-                                    ->label('End Time')
+                                    ->label('Jam Selesai')
                                     ->required()
                                     ->seconds(false),
                             ]),
 
                         Textarea::make('description')
-                            ->label('Description')
-                            ->placeholder('Optional description about this shift')
+                            ->label('Deskripsi')
+                            ->placeholder('Deskripsi opsional tentang shift ini')
                             ->rows(3)
                             ->columnSpanFull(),
                     ]),
 
-                Section::make('Shift Settings')
+                Section::make('Pengaturan Shift')
                     ->schema([
                         Grid::make(3)
                             ->schema([
                                 Checkbox::make('is_cross_day')
-                                    ->label('Cross Midnight')
-                                    ->helperText('Check if this shift crosses midnight (e.g., 23:00 - 07:00)')
+                                    ->label('Lewat Tengah Malam')
+                                    ->helperText('Centang jika shift ini melewati tengah malam (misal: 23:00 - 07:00)')
                                     ->default(false),
 
                                 TextInput::make('grace_period_minutes')
-                                    ->label('Grace Period (minutes)')
-                                    ->helperText('Late tolerance in minutes')
+                                    ->label('Masa Toleransi (menit)')
+                                    ->helperText('Toleransi keterlambatan dalam menit')
                                     ->numeric()
                                     ->default(10)
                                     ->minValue(0)
@@ -63,8 +63,8 @@ class ShiftKerjaForm
                                     ->required(),
 
                                 Checkbox::make('is_active')
-                                    ->label('Active')
-                                    ->helperText('Only active shifts can be assigned')
+                                    ->label('Aktif')
+                                    ->helperText('Hanya shift aktif yang dapat ditugaskan ke pegawai')
                                     ->default(true),
                             ]),
                     ]),

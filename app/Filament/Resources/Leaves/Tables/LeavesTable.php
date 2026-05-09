@@ -30,37 +30,37 @@ class LeavesTable
         return $table
             ->columns([
                 TextColumn::make('employee.name')
-                    ->label('Employee')
+                    ->label('Pegawai')
                     ->sortable()
                     ->searchable(),
 
                 TextColumn::make('leaveType.name')
-                    ->label('Leave Type')
+                    ->label('Jenis Cuti')
                     ->sortable()
                     ->searchable(),
 
                 TextColumn::make('start_date')
-                    ->label('Start Date')
+                    ->label('Tanggal Mulai')
                     ->date('d/m/Y')
                     ->sortable(),
 
                 TextColumn::make('end_date')
-                    ->label('End Date')
+                    ->label('Tanggal Selesai')
                     ->date('d/m/Y')
                     ->sortable(),
 
                 TextColumn::make('total_days')
-                    ->label('Total Days')
+                    ->label('Total Hari')
                     ->sortable(),
 
                 IconColumn::make('attachment_url')
-                    ->label('Attachment')
+                    ->label('Lampiran')
                     ->icon(fn ($record) => $record->attachment_url ? 'heroicon-o-paper-clip' : null)
                     ->color('primary')
                     ->url(fn ($record) => $record->attachment_url ? Storage::url($record->attachment_url) : null)
                     ->openUrlInNewTab()
                     ->alignCenter()
-                    ->tooltip(fn ($record) => $record->attachment_url ? 'View Attachment' : 'No Attachment'),
+                    ->tooltip(fn ($record) => $record->attachment_url ? 'Lihat Lampiran' : 'Tidak Ada Lampiran'),
 
                 BadgeColumn::make('status')
                     ->label('Status')
@@ -69,16 +69,22 @@ class LeavesTable
                         'success' => 'approved',
                         'danger' => 'rejected',
                     ])
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'pending' => 'Menunggu',
+                        'approved' => 'Disetujui',
+                        'rejected' => 'Ditolak',
+                        default => $state,
+                    })
                     ->sortable(),
 
                 TextColumn::make('approver.name')
-                    ->label('Approved By')
+                    ->label('Disetujui Oleh')
                     ->sortable()
                     ->searchable()
                     ->placeholder('-'),
 
                 TextColumn::make('approved_at')
-                    ->label('Approved At')
+                    ->label('Waktu Persetujuan')
                     ->dateTime('d/m/Y H:i')
                     ->sortable()
                     ->placeholder('-'),
@@ -91,30 +97,30 @@ class LeavesTable
             ])
             ->filters([
                 SelectFilter::make('employee_id')
-                    ->label('Employee')
+                    ->label('Pegawai')
                     ->relationship('employee', 'name')
                     ->searchable(),
 
                 SelectFilter::make('leave_type_id')
-                    ->label('Leave Type')
+                    ->label('Jenis Cuti')
                     ->relationship('leaveType', 'name')
                     ->searchable(),
 
                 SelectFilter::make('status')
                     ->label('Status')
                     ->options([
-                        'pending' => 'Pending',
-                        'approved' => 'Approved',
-                        'rejected' => 'Rejected',
+                        'pending' => 'Menunggu',
+                        'approved' => 'Disetujui',
+                        'rejected' => 'Ditolak',
                     ]),
 
                 Filter::make('date_range')
-                    ->label('Date Range')
+                    ->label('Rentang Tanggal')
                     ->form([
                         DatePicker::make('start_date')
-                            ->label('From'),
+                            ->label('Dari'),
                         DatePicker::make('end_date')
-                            ->label('To'),
+                            ->label('Sampai'),
                     ])
                     ->query(function (Builder $query, array $data): Builder {
                         return $query

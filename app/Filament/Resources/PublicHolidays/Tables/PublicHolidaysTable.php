@@ -24,28 +24,28 @@ class PublicHolidaysTable
         return $table
             ->columns([
                 TextColumn::make('date')
-                    ->label('Date')
+                    ->label('Tanggal')
                     ->date('d/m/Y (D)')
                     ->sortable()
                     ->badge()
                     ->color('primary'),
 
                 TextColumn::make('name')
-                    ->label('Holiday Name')
+                    ->label('Nama Hari Libur')
                     ->searchable()
                     ->sortable(),
 
                 BadgeColumn::make('type')
-                    ->label('Type')
+                    ->label('Tipe')
                     ->colors([
                         'info' => Holiday::TYPE_NATIONAL,
                         'warning' => Holiday::TYPE_COMPANY,
                     ])
-                    ->formatStateUsing(fn ($state) => $state === Holiday::TYPE_NATIONAL ? 'National' : 'Company')
+                    ->formatStateUsing(fn ($state) => $state === Holiday::TYPE_NATIONAL ? 'Nasional' : 'Kantor')
                     ->sortable(),
 
                 IconColumn::make('is_official')
-                    ->label('Official')
+                    ->label('Resmi')
                     ->boolean()
                     ->trueIcon('heroicon-o-check-circle')
                     ->falseIcon('heroicon-o-x-circle')
@@ -60,7 +60,7 @@ class PublicHolidaysTable
             ])
             ->filters([
                 SelectFilter::make('year')
-                    ->label('Year')
+                    ->label('Tahun')
                     ->options(function () {
                         $years = DB::table('holidays')
                             ->whereIn('type', ['national', 'company'])
@@ -88,16 +88,16 @@ class PublicHolidaysTable
                     }),
 
                 SelectFilter::make('type')
-                    ->label('Type')
+                    ->label('Tipe')
                     ->options([
-                        Holiday::TYPE_NATIONAL => 'National',
-                        Holiday::TYPE_COMPANY => 'Company',
+                        Holiday::TYPE_NATIONAL => 'Nasional',
+                        Holiday::TYPE_COMPANY => 'Kantor',
                     ]),
 
                 SelectFilter::make('official_only')
-                    ->label('Official Only')
+                    ->label('Hanya Resmi')
                     ->options([
-                        '1' => 'Official Holidays Only',
+                        '1' => 'Hanya Hari Libur Resmi',
                     ])
                     ->query(fn (Builder $query, $state) => $state['value'] === '1' ? $query->where('is_official', true) : $query),
             ])

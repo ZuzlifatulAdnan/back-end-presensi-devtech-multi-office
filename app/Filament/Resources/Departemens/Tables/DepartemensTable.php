@@ -15,6 +15,7 @@ class DepartemensTable
         return $table
             ->columns([
                 TextColumn::make('name')
+                    ->label('Nama Departemen')
                     ->searchable(),
                 TextColumn::make('created_at')
                     ->dateTime()

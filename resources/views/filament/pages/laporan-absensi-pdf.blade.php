@@ -172,7 +172,9 @@
                         <th style="width: 12%;">Tanggal</th>
                         <th style="width: 8%;">Jam Masuk</th>
                         <th style="width: 8%;">Jam Keluar</th>
-                        <th style="width: 10%;">Jam Kerja</th>
+                        <th style="width: 8%;">Jam Kerja</th>
+                        <th style="width: 8%;">Mode Kerja</th>
+                        <th style="width: 10%;">Kantor/Lokasi</th>
                         <th style="width: 7%;">Status</th>
                     </tr>
                 </thead>
@@ -207,13 +209,15 @@
                         <tr>
                             <td class="text-center">{{ $index + 1 }}</td>
                             <td>{{ $attendance->user->name }}</td>
-                            <td>{{ $attendance->user->position ?? '-' }}</td>
-                            <td>{{ $attendance->user->department ?? '-' }}</td>
+                            <td>{{ $attendance->user->jabatan->name ?? '-' }}</td>
+                            <td>{{ $attendance->user->departemen->name ?? '-' }}</td>
                             <td class="text-center">{{ \Carbon\Carbon::parse($attendance->date)->format('d/m/Y') }}
                             </td>
                             <td class="text-center">{{ $timeIn }}</td>
                             <td class="text-center">{{ $timeOut }}</td>
                             <td class="text-center">{{ $workingHours }}</td>
+                            <td class="text-center">{{ strtoupper($attendance->work_mode ?? 'WFO') }}</td>
+                            <td>{{ $attendance->company->name ?? 'Pusat' }}</td>
                             <td class="text-center">
                                 <span class="status-badge {{ $statusClass }}">
                                     {{ $status }}

@@ -20,7 +20,7 @@ class NoteResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-pencil-square';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Other';
+    protected static UnitEnum|string|null $navigationGroup = 'Lainnya';
 
     protected static ?int $navigationSort = 70;
 

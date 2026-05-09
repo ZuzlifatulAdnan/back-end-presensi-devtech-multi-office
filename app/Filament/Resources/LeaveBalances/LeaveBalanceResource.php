@@ -19,11 +19,15 @@ class LeaveBalanceResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-chart-bar';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Leave Management';
+    protected static UnitEnum|string|null $navigationGroup = 'Manajemen Cuti';
 
-    protected static ?string $navigationLabel = 'Leave Balances';
+    protected static ?string $navigationLabel = 'Saldo Cuti';
 
-    protected static ?string $pluralLabel = 'Leave Balances';
+    protected static ?string $modelLabel = 'Saldo Cuti';
+
+    protected static ?string $pluralModelLabel = 'Saldo Cuti';
+
+    protected static ?string $pluralLabel = 'Saldo Cuti';
 
     protected static ?int $navigationSort = 42;
 

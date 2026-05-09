@@ -16,27 +16,31 @@ class UserForm
             ->columns(2)
             ->components([
                 TextInput::make('name')
+                    ->label('Nama Lengkap')
                     ->required()
                     ->maxLength(255),
                 TextInput::make('email')
-                    ->label('Email address')
+                    ->label('Alamat Email')
                     ->email()
                     ->required()
                     ->unique(ignoreRecord: true)
                     ->maxLength(255),
                 TextInput::make('password')
+                    ->label('Kata Sandi')
                     ->password()
                     ->required(fn (string $context): bool => $context === 'create')
                     ->dehydrated(fn ($state) => filled($state))
                     ->minLength(8),
                 TextInput::make('phone')
+                    ->label('Nomor Telepon')
                     ->tel()
                     ->maxLength(20),
                 Select::make('role')
+                    ->label('Peran')
                     ->options([
                         'admin' => 'Admin',
-                        'manager' => 'Manager',
-                        'employee' => 'Employee',
+                        'manager' => 'Manajer',
+                        'employee' => 'Karyawan',
                     ])
                     ->required()
                     ->default('employee'),
