@@ -1,0 +1,950 @@
+{
+	"info": {
+		"_postman_id": "laravel-absensi-api",
+		"name": "Laravel Absensi API",
+		"description": "API Collection for Laravel Absensi Backend",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"auth_token\", jsonData.token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"password\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"login"
+							]
+						},
+						"description": "Login user and get authentication token with role, position, shift, and department"
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/logout",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"logout"
+							]
+						},
+						"description": "Logout current user"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current User (Me)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"me"
+							]
+						},
+						"description": "Get current authenticated user data with role, position, shift, and department"
+					},
+					"response": []
+				},
+				{
+					"name": "Get User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/user",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"user"
+							]
+						},
+						"description": "Get current user data with role, position, shift, and department"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"face_embedding\": \"[0.1, 0.2, 0.3, ...]\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/update-profile",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"update-profile"
+							]
+						},
+						"description": "Update user profile with face embedding"
+					},
+					"response": []
+				},
+				{
+					"name": "Update FCM Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"fcm_token\": \"your-fcm-token-here\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/update-fcm-token",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"update-fcm-token"
+							]
+						},
+						"description": "Update user FCM token for push notifications"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "User",
+			"item": [
+				{
+					"name": "Get User by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/api-user/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"api-user",
+								"1"
+							]
+						},
+						"description": "Get user data by ID"
+					},
+					"response": []
+				},
+				{
+					"name": "Update User Profile",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Updated Name\",\n    \"email\": \"updated@example.com\",\n    \"phone\": \"081234567890\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/api-user/edit",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"api-user",
+								"edit"
+							]
+						},
+						"description": "Update user profile"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Company",
+			"item": [
+				{
+					"name": "Get Company",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/company",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"company"
+							]
+						},
+						"description": "Get company information"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Attendance",
+			"item": [
+				{
+					"name": "Check In",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"latitude\": \"-6.200000\",\n    \"longitude\": \"106.816666\",\n    \"address\": \"Jakarta\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/checkin",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"checkin"
+							]
+						},
+						"description": "Check in attendance"
+					},
+					"response": []
+				},
+				{
+					"name": "Check Out",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"latitude\": \"-6.200000\",\n    \"longitude\": \"106.816666\",\n    \"address\": \"Jakarta\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/checkout",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"checkout"
+							]
+						},
+						"description": "Check out attendance"
+					},
+					"response": []
+				},
+				{
+					"name": "Is Checked In",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/is-checkin",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"is-checkin"
+							]
+						},
+						"description": "Check if user is currently checked in"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Attendances",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/api-attendances",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"api-attendances"
+							]
+						},
+						"description": "Get all attendances for current user"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Leave",
+			"item": [
+				{
+					"name": "Get Leave Types",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/leave-types",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"leave-types"
+							]
+						},
+						"description": "Get all leave types (annual leave, sick leave, etc.)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Leave Balance",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/leave-balance?year=2025",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"leave-balance"
+							],
+							"query": [
+								{
+									"key": "year",
+									"value": "2025",
+									"description": "Year for leave balance (optional, defaults to current year)"
+								}
+							]
+						},
+						"description": "Get leave balance for current user"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Leaves",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/leaves?status=pending",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"leaves"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "pending",
+									"description": "Filter by status: pending, approved, rejected, cancelled (optional)"
+								}
+							]
+						},
+						"description": "Get all leaves for current user"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Leave by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/leaves/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"leaves",
+								"1"
+							]
+						},
+						"description": "Get leave details by ID"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Leave Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"leave_type_id\": 1,\n    \"start_date\": \"2025-01-15\",\n    \"end_date\": \"2025-01-17\",\n    \"reason\": \"Family event\",\n    \"attachment_url\": \"https://example.com/document.pdf\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/leaves",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"leaves"
+							]
+						},
+						"description": "Create new leave request. Total days will be calculated automatically excluding weekends and holidays. Leave balance will be checked."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Leave Request",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"leave_type_id\": 1,\n    \"start_date\": \"2025-01-16\",\n    \"end_date\": \"2025-01-18\",\n    \"reason\": \"Updated reason\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/leaves/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"leaves",
+								"1"
+							]
+						},
+						"description": "Update leave request (only if status is pending)"
+					},
+					"response": []
+				},
+				{
+					"name": "Cancel Leave Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/leaves/1/cancel",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"leaves",
+								"1",
+								"cancel"
+							]
+						},
+						"description": "Cancel leave request (only if status is pending)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Notes",
+			"item": [
+				{
+					"name": "Get All Notes",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/api-notes",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"api-notes"
+							]
+						},
+						"description": "Get all notes"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Note",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Note Title\",\n    \"note\": \"Note content here\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/api-notes",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"api-notes"
+							]
+						},
+						"description": "Create new note"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Note by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/api-notes/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"api-notes",
+								"1"
+							]
+						},
+						"description": "Get note by ID"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Note",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Updated Title\",\n    \"note\": \"Updated content\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/api-notes/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"api-notes",
+								"1"
+							]
+						},
+						"description": "Update note"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Note",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/api-notes/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"api-notes",
+								"1"
+							]
+						},
+						"description": "Delete note"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Overtime",
+			"item": [
+				{
+					"name": "Start Overtime",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"reason\": \"Project deadline\",\n    \"overtime_date\": \"2024-01-01\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/start-overtime",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"start-overtime"
+							]
+						},
+						"description": "Start overtime"
+					},
+					"response": []
+				},
+				{
+					"name": "End Overtime",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"overtime_id\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/end-overtime",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"end-overtime"
+							]
+						},
+						"description": "End overtime"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Overtime Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/overtime-status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"overtime-status"
+							]
+						},
+						"description": "Check today's overtime status"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Overtimes",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/overtimes",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"overtimes"
+							]
+						},
+						"description": "Get all overtimes for current user"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
