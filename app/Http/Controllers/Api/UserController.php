@@ -11,11 +11,33 @@ class UserController extends Controller
     //get by user id
     public function getUserId($id)
     {
-        $user = User::find($id);
+        $user = User::with(['company', 'shiftKerja', 'departemen', 'jabatan'])->find($id);
+        
+        if (!$user) {
+            return response(['status' => 'Error', 'message' => 'User not found'], 404);
+        }
+
         return response([
             'status' => 'Success',
             'message' => 'User found',
-            'data' => $user
+            'data' => [
+                'user' => new \App\Http\Resources\UserResource($user),
+                'role' => $user->role,
+                'work_mode' => $user->work_mode,
+                'company' => $user->company ? [
+                    'id' => $user->company->id,
+                    'name' => $user->company->name,
+                    'latitude' => $user->company->latitude,
+                    'longitude' => $user->company->longitude,
+                    'radius_km' => $user->company->radius_km,
+                ] : null,
+                'default_shift' => $user->shiftKerja ? [
+                    'id' => $user->shiftKerja->id,
+                    'name' => $user->shiftKerja->name,
+                    'start_time' => $user->shiftKerja->start_time,
+                    'end_time' => $user->shiftKerja->end_time,
+                ] : null,
+            ]
         ], 200);
     }
 

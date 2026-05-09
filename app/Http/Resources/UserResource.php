@@ -25,6 +25,8 @@ class UserResource extends JsonResource
             'jabatan_id' => $this->jabatan_id,
             'departemen_id' => $this->departemen_id,
             'shift_kerja_id' => $this->shift_kerja_id,
+            'company_id' => $this->company_id,
+            'work_mode' => $this->work_mode,
             'image_url' => $this->image_url ? asset('storage/'.$this->image_url) : null,
             'face_embedding' => $this->face_embedding,
             'fcm_token' => $this->fcm_token,

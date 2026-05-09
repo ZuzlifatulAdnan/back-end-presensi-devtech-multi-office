@@ -33,12 +33,20 @@ class AuthController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
 
         // Load relationships
-        $user->load(['shiftKerja', 'departemen', 'jabatan']);
+        $user->load(['shiftKerja', 'departemen', 'jabatan', 'company']);
 
         $response = [
             'user' => new UserResource($user),
             'token' => $token,
             'role' => $user->role,
+            'work_mode' => $user->work_mode,
+            'company' => $user->company ? [
+                'id' => $user->company->id,
+                'name' => $user->company->name,
+                'latitude' => $user->company->latitude,
+                'longitude' => $user->company->longitude,
+                'radius_km' => $user->company->radius_km,
+            ] : null,
             'position' => $user->jabatan ? [
                 'id' => $user->jabatan->id,
                 'name' => $user->jabatan->name,
@@ -116,11 +124,19 @@ class AuthController extends Controller
         $user = $request->user();
 
         // Load relationships
-        $user->load(['shiftKerja', 'departemen', 'jabatan']);
+        $user->load(['shiftKerja', 'departemen', 'jabatan', 'company']);
 
         $response = [
             'user' => new UserResource($user),
             'role' => $user->role,
+            'work_mode' => $user->work_mode,
+            'company' => $user->company ? [
+                'id' => $user->company->id,
+                'name' => $user->company->name,
+                'latitude' => $user->company->latitude,
+                'longitude' => $user->company->longitude,
+                'radius_km' => $user->company->radius_km,
+            ] : null,
             'position' => $user->jabatan ? [
                 'id' => $user->jabatan->id,
                 'name' => $user->jabatan->name,
