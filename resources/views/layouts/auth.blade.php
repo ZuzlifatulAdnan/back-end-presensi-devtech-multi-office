@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no" name="viewport">
-    <title>@yield('title') &mdash; JagoHRIS</title>
+    <title>@yield('title') &mdash; {{ config('app.name') }}</title>
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
 
     <!-- General CSS Files -->

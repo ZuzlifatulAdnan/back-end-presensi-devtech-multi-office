@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'JagoHRIS'),
+    'name' => env('APP_NAME', 'AbsenDav Tech KI'),
 
     /*
     |--------------------------------------------------------------------------

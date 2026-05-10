@@ -68,6 +68,9 @@ Route::get('/api-user/{id}', [App\Http\Controllers\Api\UserController::class, 'g
 // update user
 Route::post('/api-user/edit', [App\Http\Controllers\Api\UserController::class, 'updateProfile'])->middleware('auth:sanctum');
 
+// update password
+Route::post('/api-user/update-password', [App\Http\Controllers\Api\UserController::class, 'updatePassword'])->middleware('auth:sanctum');
+
 // overtime
 Route::post('/start-overtime', [App\Http\Controllers\Api\OvertimeController::class, 'startOvertime'])->middleware('auth:sanctum');
 Route::post('/end-overtime', [App\Http\Controllers\Api\OvertimeController::class, 'endOvertime'])->middleware('auth:sanctum');

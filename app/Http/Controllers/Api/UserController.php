@@ -74,4 +74,41 @@ class UserController extends Controller
             ]);
         }
     }
+
+    public function updatePassword(Request $request)
+    {
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            'current_password' => 'required',
+            'password' => 'required|string|min:8|confirmed',
+        ], [
+            'current_password.required' => 'Password lama wajib diisi',
+            'password.required' => 'Password baru wajib diisi',
+            'password.min' => 'Password baru minimal 8 karakter',
+            'password.confirmed' => 'Konfirmasi password tidak sesuai',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()->first(),
+            ], 422);
+        }
+
+        $user = $request->user();
+
+        if (!\Illuminate\Support\Facades\Hash::check($request->current_password, $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Password lama tidak sesuai',
+            ], 400);
+        }
+
+        $user->password = \Illuminate\Support\Facades\Hash::make($request->password);
+        $user->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password berhasil diubah',
+        ], 200);
+    }
 }
