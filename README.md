@@ -2,6 +2,8 @@
 
 Sistem backend comprehensive untuk aplikasi absensi karyawan berbasis Laravel dengan dukungan API untuk mobile apps (Flutter) dan web dashboard untuk admin menggunakan Filament.
 
+> 📘 **Fitur terbaru** — presensi WFH/WFA, peta sebelum presensi, upload lampiran izin, ubah password, dan pengaturan nama/logo aplikasi lewat API: lihat [`docs/api-fitur-baru.md`](docs/api-fitur-baru.md) untuk referensi endpoint lengkap beserta contoh integrasi Flutter.
+
 ---
 
 ## 🚀 How to Install
@@ -105,6 +107,24 @@ npm run build
 
 _Note: Auto-fill enabled in development environment_
 
+### 🔄 Upgrade dari Instalasi yang Sudah Berjalan
+
+Versi 2.1 menambah 4 migrasi (tabel `app_settings`, kolom WFH pada `attendances`, metadata lampiran pada `leaves`, status aktif lokasi kantor). Untuk memperbaruinya:
+
+```bash
+php artisan migrate
+
+# Opsional: isi nilai default pengaturan aplikasi
+php artisan db:seed --class=AppSettingSeeder
+
+# Wajib bila belum pernah dijalankan, agar foto & lampiran bisa diakses aplikasi
+php artisan storage:link
+
+php artisan optimize:clear
+```
+
+Data lama tetap utuh dan seluruh endpoint lama tetap berfungsi — lihat [Catatan Upgrade Aplikasi Lama](docs/api-fitur-baru.md#catatan-upgrade-aplikasi-lama) sebelum merilis versi aplikasi mobile berikutnya.
+
 ---
 
 ## 🚀 Tech Stack
@@ -131,15 +151,25 @@ _Note: Auto-fill enabled in development environment_
 ### 🏢 Company Management
 
 -   **Company Settings**: Konfigurasi detail perusahaan (nama, alamat, email, lokasi GPS)
+-   **Multi-Location**: Beberapa lokasi kantor, masing-masing dengan koordinat, radius, dan status aktif
 -   **Location-based Attendance**: Pengaturan koordinat kantor dengan radius validasi
 -   **Attendance Types**: Dukungan GPS-based atau QR Code-based attendance
 -   **Work Hours Configuration**: Pengaturan jam kerja standar perusahaan
+
+### ⚙️ App Settings (White-label)
+
+-   **Branding dari API**: Nama aplikasi, logo terang/gelap, favicon, banner login, dan warna tema diambil aplikasi mobile dari `/api/app-settings`
+-   **Kontrol Aturan Presensi**: Wajib foto, wajib catatan WFH, blokir fake GPS, toleransi akurasi GPS
+-   **Konfigurasi Peta**: Tile URL, atribusi, dan zoom awal peta presensi
+-   **Version Gate**: Versi minimum Android/iOS dengan opsi force update
+-   **Maintenance Mode**: Menolak presensi sementara dengan pesan kustom
 
 ### 👥 Employee Management
 
 -   **User Registration & Profile**: Manajemen data karyawan lengkap
 -   **Department & Position**: Struktur organisasi dengan departemen dan jabatan
 -   **Shift Management**: Sistem shift kerja fleksibel dengan cross-day support
+-   **Work Mode**: Penetapan mode kerja per pegawai (WFO / WFH / WFA), bisa diubah massal dari tabel
 -   **Face Recognition**: Face embedding untuk autentikasi tambahan
 -   **Role-based Access**: Admin, Supervisor, dan Employee roles
 
@@ -156,25 +186,35 @@ _Note: Auto-fill enabled in development environment_
 #### 🔐 Authentication & Profile
 
 -   **Login/Logout**: Sanctum token-based authentication dengan FCM integration
--   **Profile Management**: Update profile lengkap dengan foto
+-   **Rate-limited Login**: 5 percobaan gagal per email+IP per menit
+-   **Logout All Devices**: Cabut seluruh token dari satu endpoint
+-   **Profile Management**: Update profile lengkap dengan foto (selalu milik pemegang token)
+-   **Ubah Password**: Validasi kuat (min 8 karakter, huruf + angka, beda dari lama) dan token perangkat lain otomatis dicabut
 -   **Face Recognition**: Update face embedding untuk autentikasi biometric
 -   **FCM Token Management**: Push notifications untuk approval status
 
 #### ⏰ Attendance Management
 
 -   **Check-in/Check-out**: GPS location tracking dengan validasi radius
--   **Location Validation**: Validasi kehadiran berdasarkan koordinat perusahaan
+-   **WFO / WFH / WFA**: Presensi remote tercatat di tabel yang sama, lengkap dengan foto bukti, catatan aktivitas, alamat, dan jarak ke kantor terdekat
+-   **Pre-check & Peta**: `/api/attendance/pre-check` mengirim pin kantor, radius, jarak, alasan tombol nonaktif, jendela shift, dan jam server untuk halaman peta sebelum presensi
+-   **Location Validation**: Validasi kehadiran berdasarkan koordinat perusahaan (multi-lokasi)
+-   **Anti Fake GPS**: Presensi ditolak bila aplikasi melaporkan mock location
+-   **Anti Double Check-in**: Dijamin unique index `(user_id, date)` di database
+-   **Cross-day Shift**: Absen pulang setelah tengah malam otomatis dicocokkan ke shift malam sebelumnya
 -   **QR Code Scanning**: Alternative attendance menggunakan QR code harian
--   **Real-time Status**: Status kehadiran real-time (is-checkin, is-checkout)
--   **Attendance History**: Riwayat attendance dengan filter tanggal dan export
+-   **Real-time Status**: Status kehadiran real-time (`/api/attendance/today`, is-checkin)
+-   **Attendance History**: Riwayat attendance dengan filter tanggal/status/mode kerja, paginasi, dan rekap bulanan (`/api/attendance/summary`)
 
 #### 📝 Permission & Leave Management
 
 -   **Leave Request**: Pengajuan cuti dengan berbagai tipe (annual, sick, etc.)
 -   **Permission Request**: Pengajuan izin dengan reason dan upload dokumen
--   **Document Upload**: Support upload gambar pendukung (surat dokter, dll)
--   **Approval Tracking**: Real-time status tracking approval
--   **Leave Balance**: Monitoring sisa cuti per tipe leave
+-   **Document Upload**: Lampiran JPG/PNG/WEBP/PDF sampai 5 MB, lengkap dengan nama file, MIME, dan ukuran
+-   **Overlap Guard**: Menolak pengajuan yang bertabrakan dengan pengajuan lain di rentang tanggal yang sama
+-   **Perhitungan Hari Kerja**: `total_days` dihitung server dengan mengecualikan weekend dan hari libur
+-   **Approval Tracking**: Real-time status tracking approval (`pending`, `approved`, `rejected`, `cancelled`)
+-   **Leave Balance**: Monitoring sisa cuti per tipe leave, kuota dipotong dalam transaksi terkunci saat disetujui
 
 #### ⏱️ Overtime Management
 
@@ -209,7 +249,8 @@ _Note: Auto-fill enabled in development environment_
 
 #### 🏢 Company & Settings
 
--   **Company Settings**: Konfigurasi lokasi, radius, dan attendance type
+-   **Pengaturan Aplikasi**: Satu halaman untuk nama aplikasi, logo, favicon, warna tema, kontak perusahaan, aturan presensi, konfigurasi peta, versi minimum, dan maintenance mode — langsung dibaca aplikasi mobile
+-   **Company Settings**: Konfigurasi lokasi, radius, attendance type, dan status aktif tiap lokasi
 -   **Holiday Management**: Kalender hari libur nasional dan perusahaan
 -   **Weekend Configuration**: Pengaturan hari kerja dan weekend
 -   **Leave Types**: Manajemen tipe-tipe cuti (annual, sick, maternity, dll)
@@ -221,6 +262,8 @@ _Note: Auto-fill enabled in development environment_
 -   **Attendance Reports**: Laporan kehadiran dengan export PDF/Excel
 -   **Late Tracking**: Monitoring keterlambatan dengan grace period
 -   **Location Verification**: Verifikasi lokasi check-in/check-out
+-   **Bukti WFH**: Halaman detail absensi menampilkan foto bukti masuk/pulang, catatan aktivitas, alamat, dan jarak dari kantor
+-   **Deteksi Fake GPS**: Kolom dan filter khusus untuk presensi yang terindikasi mock location
 
 #### ✅ Approval Management
 
@@ -554,31 +597,74 @@ Email Notification → Status Update
 
 ## 🛠️ API Endpoints Documentation
 
+> Referensi lengkap dengan contoh request/response dan integrasi Flutter: [`docs/api-fitur-baru.md`](docs/api-fitur-baru.md).
+
+### 📦 Response Format
+
+Semua endpoint memakai satu bentuk respons:
+
+```json
+{ "success": true, "message": "Absen masuk berhasil.", "data": {}, "meta": {} }
+{ "success": false, "message": "Anda berada di luar radius kantor.", "errors": {}, "data": {} }
+```
+
+`message` selalu berbahasa Indonesia dan aman ditampilkan langsung ke pengguna. Endpoint lama tetap mengirim key lamanya (`attendance`, `user`, `role`, `company`, `checkedin`, dll.) agar build aplikasi yang sudah beredar tidak perlu langsung diubah.
+
+### ⚙️ App Settings Endpoints
+
+| Method | Endpoint            | Description                                           | Auth Required |
+| ------ | ------------------- | ----------------------------------------------------- | ------------- |
+| GET    | `/api/app-settings` | Nama aplikasi, logo, warna, versi, aturan & konfig peta | ❌            |
+
 ### 🔐 Authentication Endpoints
 
 | Method | Endpoint                | Description                       | Auth Required |
 | ------ | ----------------------- | --------------------------------- | ------------- |
 | POST   | `/api/login`            | User login dengan email/password  | ❌            |
 | POST   | `/api/logout`           | User logout dan hapus token       | ✅            |
-| POST   | `/api/update-profile`   | Update profile user               | ✅            |
+| POST   | `/api/logout-all`       | Logout dari semua perangkat       | ✅            |
+| GET    | `/api/me`               | Profil user + pengaturan aplikasi | ✅            |
+| POST   | `/api/update-profile`   | Update face embedding             | ✅            |
 | POST   | `/api/update-fcm-token` | Update FCM token untuk notifikasi | ✅            |
-| GET    | `/api/user`             | Get current user data             | ✅            |
+| GET    | `/api/user`             | Alias `/api/me`                   | ✅            |
 
 ### 🏢 Company Endpoints
 
-| Method | Endpoint       | Description                        | Auth Required |
-| ------ | -------------- | ---------------------------------- | ------------- |
-| GET    | `/api/company` | Get company information & settings | ✅            |
+| Method | Endpoint         | Description                                | Auth Required |
+| ------ | ---------------- | ------------------------------------------ | ------------- |
+| GET    | `/api/company`   | Get company information & settings          | ✅            |
+| GET    | `/api/companies` | Semua lokasi kantor yang boleh dipakai user | ✅            |
 
 ### ⏰ Attendance Endpoints
 
-| Method | Endpoint               | Description                        | Auth Required |
-| ------ | ---------------------- | ---------------------------------- | ------------- |
-| POST   | `/api/checkin`         | Check-in dengan GPS coordinates    | ✅            |
-| POST   | `/api/checkout`        | Check-out dengan GPS coordinates   | ✅            |
-| GET    | `/api/is-checkin`      | Check status apakah sudah check-in | ✅            |
-| GET    | `/api/api-attendances` | Get attendance history             | ✅            |
-| POST   | `/api/check-qr`        | Attendance via QR code scanning    | ✅            |
+| Method | Endpoint                     | Description                                      | Auth Required |
+| ------ | ---------------------------- | ------------------------------------------------ | ------------- |
+| GET    | `/api/attendance/pre-check`  | Data peta + kelayakan presensi sebelum tombol ditekan | ✅        |
+| GET    | `/api/attendance/locations`  | Pin kantor + jarak untuk halaman peta            | ✅            |
+| POST   | `/api/attendance/check-in`   | Check-in WFO/WFH/WFA (multipart bila kirim foto) | ✅            |
+| POST   | `/api/attendance/check-out`  | Check-out                                         | ✅            |
+| GET    | `/api/attendance/today`      | Status presensi hari ini + `next_action`         | ✅            |
+| GET    | `/api/attendance/history`    | Riwayat dengan filter & paginasi                 | ✅            |
+| GET    | `/api/attendance/summary`    | Rekap bulanan (tepat waktu, telat, per mode)     | ✅            |
+| POST   | `/api/checkin`               | Alias lama `/api/attendance/check-in`            | ✅            |
+| POST   | `/api/checkout`              | Alias lama `/api/attendance/check-out`           | ✅            |
+| GET    | `/api/is-checkin`            | Alias lama status hari ini                       | ✅            |
+| GET    | `/api/api-attendances`       | Alias lama `/api/attendance/history`             | ✅            |
+| POST   | `/api/check-qr`              | Attendance via QR code scanning                  | ✅            |
+
+### 🗓️ Leave & Izin Endpoints
+
+| Method    | Endpoint                    | Description                              | Auth Required |
+| --------- | --------------------------- | ---------------------------------------- | ------------- |
+| GET       | `/api/leave-types`          | Daftar jenis izin/cuti                   | ✅            |
+| GET       | `/api/leave-balance`        | Sisa kuota per jenis (`?year=`)          | ✅            |
+| GET       | `/api/leaves`               | Daftar pengajuan milik sendiri           | ✅            |
+| POST      | `/api/leaves`               | Ajukan izin/cuti + lampiran (multipart)  | ✅            |
+| GET       | `/api/leaves/{id}`          | Detail pengajuan                         | ✅            |
+| PUT\|POST | `/api/leaves/{id}`          | Ubah pengajuan (gunakan POST untuk file) | ✅            |
+| POST      | `/api/leaves/{id}/cancel`   | Batalkan pengajuan                       | ✅            |
+| POST      | `/api/leaves/{id}/approve`  | Setujui (admin/manager/hr)               | ✅            |
+| POST      | `/api/leaves/{id}/reject`   | Tolak dengan alasan (admin/manager/hr)   | ✅            |
 
 ### 📝 Permission Endpoints
 
@@ -611,10 +697,12 @@ Email Notification → Status Update
 
 ### 👤 User Management Endpoints
 
-| Method | Endpoint             | Description         | Auth Required |
-| ------ | -------------------- | ------------------- | ------------- |
-| GET    | `/api/api-user/{id}` | Get user by ID      | ✅            |
-| POST   | `/api/api-user/edit` | Update user profile | ✅            |
+| Method | Endpoint                        | Description                                       | Auth Required |
+| ------ | ------------------------------- | ------------------------------------------------- | ------------- |
+| GET    | `/api/api-user/{id}`            | Get user by ID (pemilik akun atau admin/manager/hr) | ✅          |
+| POST   | `/api/api-user/edit`            | Update profil sendiri (field `id` diabaikan)      | ✅            |
+| POST   | `/api/change-password`          | Ubah password + cabut token perangkat lain        | ✅            |
+| POST   | `/api/api-user/update-password` | Alias lama `/api/change-password`                 | ✅            |
 
 ---
 
@@ -622,17 +710,48 @@ Email Notification → Status Update
 
 ### 📍 Location-based Attendance
 
-```php
-// Validasi radius attendance
-$company = Company::first();
-$userLat = $request->latitude;
-$userLon = $request->longitude;
-$distance = calculateDistance($userLat, $userLon, $company->latitude, $company->longitude);
+Validasi radius ditangani `App\Services\GeofenceService`. Daftar kantor aktif di-cache 10 menit dan dievaluasi di memori, jadi tidak ada query berulang saat check-in.
 
-if ($distance > $company->radius_km) {
-    return response(['message' => 'Lokasi terlalu jauh dari kantor'], 400);
+```php
+// app/Services/AttendanceService.php
+$geo = $this->geofence->evaluate($user, $latitude, $longitude);
+
+if (! $isRemote && ! $geo['within_radius']) {
+    throw new AttendanceException('Anda berada di luar radius kantor.', 422, [
+        'distance_meters' => $geo['distance_meters'],
+        'nearest_location' => $geo['nearest']?->name,
+        'radius_meters' => $geo['nearest']?->radiusInMeters(),
+    ]);
+}
+
+$companyId = $geo['matched']->id; // lokasi terdekat yang radiusnya terpenuhi
+```
+
+Pegawai yang terikat ke satu kantor hanya divalidasi terhadap kantor tersebut; pegawai tanpa `company_id` boleh absen di kantor aktif mana pun (multi-lokasi).
+
+### 🏠 Work Mode Logic (WFO / WFH / WFA)
+
+```php
+// app/Services/AttendanceService.php
+$modes = match ($user->work_mode) {
+    'wfa' => ['wfo', 'wfh', 'wfa'],
+    'wfh' => ['wfo', 'wfh'],
+    default => ['wfo'],
+};
+
+// Admin bisa mematikan seluruh presensi remote dari Pengaturan Aplikasi
+if (! $settings->wfh_enabled) {
+    $modes = ['wfo'];
 }
 ```
+
+| `users.work_mode` | Mode yang boleh dipakai | Validasi radius              |
+| ----------------- | ----------------------- | ---------------------------- |
+| `wfo`             | `wfo`                   | Wajib di dalam radius kantor |
+| `wfh`             | `wfo`, `wfh`            | Hanya saat memilih `wfo`     |
+| `wfa`             | `wfo`, `wfh`, `wfa`     | Hanya saat memilih `wfo`     |
+
+Untuk mode remote, foto bukti dan catatan aktivitas wajib (bisa dimatikan admin), dan jarak ke kantor terdekat tetap direkam sebagai informasi.
 
 ### ⏰ Shift Management Logic
 
@@ -738,26 +857,35 @@ postman-collection/FIC16-Absensi.postman_collection.json
 
 ### Database Indexing
 
+Index berikut sudah dibuat lewat migrasi, tidak perlu dijalankan manual:
+
 ```sql
--- Key indexes untuk performance
-CREATE INDEX idx_attendances_user_date ON attendances(user_id, date);
-CREATE INDEX idx_permissions_user_status ON permissions(user_id, is_approved);
-CREATE INDEX idx_leaves_user_dates ON leaves(user_id, start_date, end_date);
+-- attendances: unique index sekaligus mencegah double check-in
+UNIQUE INDEX attendances_user_id_date_unique ON attendances(user_id, date);
+INDEX attendances_date_status_index      ON attendances(date, status);
+INDEX attendances_company_id_date_index  ON attendances(company_id, date);
+
+-- leaves
+INDEX leaves_employee_id_status_index    ON leaves(employee_id, status);
+INDEX leaves_start_date_end_date_index   ON leaves(start_date, end_date);
+
+-- companies
+INDEX companies_is_active_index          ON companies(is_active);
 ```
 
 ### Caching Strategy
 
 ```php
-// Cache company settings
-$company = Cache::remember('company_settings', 3600, function () {
-    return Company::first();
-});
+// Pengaturan aplikasi (nama, logo, aturan presensi) — cache 1 jam,
+// otomatis di-flush saat admin menyimpan perubahan
+App\Models\AppSetting::current();
 
-// Cache user shift information
-$userShift = Cache::remember("user_shift_{$userId}", 1800, function () use ($userId) {
-    return User::with('shiftKerja')->find($userId)->shiftKerja;
-});
+// Daftar kantor aktif untuk validasi radius — cache 10 menit,
+// otomatis di-flush saat data lokasi kantor berubah
+app(App\Services\GeofenceService::class)->activeCompanies();
 ```
+
+Tabel di panel admin (Absensi, Cuti, Pegawai) sudah memakai eager loading (`modifyQueryUsing`) untuk menghindari N+1 query.
 
 ### Queue Jobs untuk Background Processing
 
@@ -776,21 +904,26 @@ dispatch(new GenerateMonthlyReport($month, $year));
 ### API Security
 
 -   **Sanctum Token Authentication**: Secure token-based API access
--   **Rate Limiting**: API throttling untuk prevent abuse
+-   **Rate Limiting**: Login 5 percobaan/menit per email+IP (plus throttle 20/menit per rute), presensi 30/menit, ubah password 10/menit
 -   **CSRF Protection**: Cross-site request forgery protection
--   **Input Validation**: Comprehensive request validation
+-   **Input Validation**: Form Request terpisah per endpoint dengan pesan berbahasa Indonesia
+-   **Uniform Error Handling**: Exception handler khusus prefix `api/*` — tidak pernah membocorkan stack trace ke aplikasi mobile
 -   **SQL Injection Prevention**: Eloquent ORM protection
 
 ### Data Protection
 
 -   **Password Hashing**: Bcrypt dengan custom rounds
--   **File Upload Validation**: Strict file type & size validation
--   **Location Data Encryption**: GPS coordinates protection
--   **Audit Logging**: Track all critical operations
+-   **Strong Password Policy**: Minimal 8 karakter, huruf + angka, wajib berbeda dari password lama
+-   **Session Revocation**: Token perangkat lain dicabut otomatis setelah ganti password
+-   **File Upload Validation**: Foto presensi maks 4 MB (JPG/PNG/WEBP), lampiran izin maks 5 MB (+ PDF); file lama dihapus saat diganti
+-   **Anti Fake GPS**: Presensi ditolak bila aplikasi melaporkan mock location
+-   **Data Integrity**: Unique index `(user_id, date)` mencegah duplikat presensi; kuota cuti dipotong dalam transaksi dengan `lockForUpdate`
 
 ### Access Control
 
 -   **Role-based Access**: Admin, Supervisor, Employee roles
+-   **Ownership Checks**: Profil dan pengajuan izin hanya bisa dibaca/diubah pemiliknya (atau admin/manager/hr); endpoint profil selalu memakai pemilik token, bukan `id` dari request body
+-   **Work Mode Enforcement**: Mode kerja divalidasi ulang di server, tidak percaya pilihan aplikasi
 -   **Permission Gates**: Granular permission control
 -   **Two-Factor Authentication**: Optional 2FA dengan Fortify
 -   **Session Management**: Secure session handling
@@ -821,7 +954,7 @@ vendor/bin/pint --test
 
 -   Update README untuk fitur baru
 -   Tambahkan PHPDoc untuk methods
--   Update API documentation
+-   Update API documentation ([`API_DOCUMENTATION.md`](API_DOCUMENTATION.md) dan [`docs/api-fitur-baru.md`](docs/api-fitur-baru.md))
 -   Include test cases
 
 ---
@@ -903,20 +1036,23 @@ Master data shift kerja.
 - Date and time format validation
 
 ### 3. GPS Security
-- Server-side radius checking (Haversine formula)
+- Server-side radius checking (Haversine formula, satuan meter)
 - Cannot spoof location on backend
-- Stores actual GPS coordinates for audit
+- Menolak presensi dengan flag mock location
+- Menyimpan koordinat, alamat, dan jarak ke kantor untuk audit
 
 ### 4. File Security
 - Files stored in `storage/app/public/`
-- Symlink to `public/storage/`
+- Symlink to `public/storage/` (`php artisan storage:link`)
 - Validate MIME types
-- Max file size: 2MB
+- Foto profil maks 2 MB, foto presensi maks 4 MB, lampiran izin maks 5 MB
+- File lama dihapus dari storage saat diganti atau saat penyimpanan record gagal
 
 ### 5. API Rate Limiting
-- Built-in Laravel rate limiting
-- Configure in `bootstrap/app.php`
-- Default: 60 requests per minute
+- Diatur per rute di `routes/api.php` + rate limiter per kredensial di `LoginRequest`
+- Login: 5 percobaan gagal per email+IP per menit (rute juga dibatasi 20/menit)
+- Check-in / check-out: 30 permintaan per menit
+- Ubah password: 10 permintaan per menit
 
 ---
 
@@ -1145,7 +1281,21 @@ This project is licensed under the MIT License.
 
 ## 📝 Changelog
 
-### Version 2.0 (Current)
+### Version 2.1 (Current)
+
+-   ✅ Presensi WFH/WFA lengkap dengan foto bukti, catatan aktivitas, alamat, dan jarak ke kantor
+-   ✅ Endpoint `pre-check` untuk peta sebelum presensi (pin kantor, radius, jarak, `blockers`, jam server)
+-   ✅ Pengaturan aplikasi white-label (nama, logo, warna, versi minimum, maintenance) via `/api/app-settings` + halaman admin
+-   ✅ Upload lampiran izin/cuti (JPG/PNG/WEBP/PDF s/d 5 MB) dengan metadata file
+-   ✅ Ubah password dengan kebijakan kuat dan pencabutan sesi perangkat lain
+-   ✅ Multi-lokasi kantor dengan status aktif
+-   ✅ Deteksi fake GPS, blokir presensi saat cuti disetujui, penanganan shift lintas hari
+-   ✅ Format respons API seragam `{success, message, data, meta}` (kompatibel dengan build lama)
+-   ✅ Rate limiting login/presensi/ubah password, index database baru, dan caching pengaturan & lokasi
+-   ✅ Perbaikan keamanan: `api-user/edit` tidak lagi menerima `id` dari body, detail izin dibatasi pemilik
+-   ✅ Perbaikan bug: status `cancelled` pada izin, `early_leave_minutes` yang tidak pernah terisi, duplikat presensi
+
+### Version 2.0
 
 -   ✅ Laravel 12 upgrade
 -   ✅ Filament v4 admin panel
@@ -1165,7 +1315,7 @@ This project is licensed under the MIT License.
 
 ---
 
-**Last Updated**: October 2025
+**Last Updated**: September 2026
 **Laravel Version**: 12.x
 **PHP Version**: 8.3.22
 **Maintained By**: Development Team
