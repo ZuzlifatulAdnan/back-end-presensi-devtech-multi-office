@@ -2,14 +2,19 @@
 
 namespace App\Filament\Resources\Users\Tables;
 
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Select;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\ImageColumn;
+use Filament\Tables\Columns\SelectColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 
 class UsersTable
 {
@@ -55,17 +60,16 @@ class UsersTable
                         default => $state,
                     })
                     ->searchable(),
-                TextColumn::make('work_mode')
+                SelectColumn::make('work_mode')
                     ->label('Mode')
-                    ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'wfo' => 'success',
-                        'wfh' => 'warning',
-                        'wfa' => 'info',
-                        default => 'gray',
-                    })
-                    ->formatStateUsing(fn (string $state): string => strtoupper($state))
-                    ->searchable(),
+                    ->options([
+                        'wfo' => 'WFO',
+                        'wfh' => 'WFH',
+                        'wfa' => 'WFA',
+                    ])
+                    ->selectablePlaceholder(false)
+                    ->rules(['required', 'in:wfo,wfh,wfa'])
+                    ->sortable(),
                 TextColumn::make('jabatan.name')
                     ->label('Jabatan')
                     ->badge()
@@ -111,6 +115,13 @@ class UsersTable
                         'manager' => 'Manajer',
                         'employee' => 'Karyawan',
                     ]),
+                SelectFilter::make('work_mode')
+                    ->label('Mode Kerja')
+                    ->options([
+                        'wfo' => 'WFO',
+                        'wfh' => 'WFH',
+                        'wfa' => 'WFA',
+                    ]),
                 SelectFilter::make('jabatan_id')
                     ->label('Jabatan')
                     ->relationship('jabatan', 'name')
@@ -138,6 +149,33 @@ class UsersTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    BulkAction::make('change_work_mode')
+                        ->label('Ubah Mode Kerja')
+                        ->icon('heroicon-o-arrows-right-left')
+                        ->color('info')
+                        ->modalHeading('Ubah Mode Kerja Pegawai Terpilih')
+                        ->modalSubmitActionLabel('Simpan')
+                        ->form([
+                            Select::make('work_mode')
+                                ->label('Mode Kerja')
+                                ->options([
+                                    'wfo' => 'WFO (Work From Office)',
+                                    'wfh' => 'WFH (Work From Home)',
+                                    'wfa' => 'WFA (Work From Anywhere)',
+                                ])
+                                ->required()
+                                ->native(false),
+                        ])
+                        ->action(function (Collection $records, array $data): void {
+                            $records->each(fn ($record) => $record->update(['work_mode' => $data['work_mode']]));
+
+                            Notification::make()
+                                ->title('Mode kerja diperbarui')
+                                ->body($records->count().' pegawai diubah menjadi '.strtoupper($data['work_mode']).'.')
+                                ->success()
+                                ->send();
+                        })
+                        ->deselectRecordsAfterCompletion(),
                     DeleteBulkAction::make(),
                 ]),
             ])

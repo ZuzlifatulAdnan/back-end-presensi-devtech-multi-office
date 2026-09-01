@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Attendances;
 use App\Filament\Resources\Attendances\Pages\EditAttendance;
 use App\Filament\Resources\Attendances\Pages\ListAttendances;
 use App\Filament\Resources\Attendances\Schemas\AttendanceForm;
+use App\Filament\Resources\Attendances\Schemas\AttendanceInfolist;
 use App\Filament\Resources\Attendances\Tables\AttendancesTable;
 use App\Models\Attendance;
 use BackedEnum;
@@ -32,6 +33,11 @@ class AttendanceResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return AttendanceForm::configure($schema);
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return AttendanceInfolist::configure($schema);
     }
 
     public static function table(Table $table): Table

@@ -2,6 +2,8 @@
 
 Comprehensive API documentation for Flutter integration with JagoHRIS Laravel backend.
 
+> **Fitur baru:** presensi WFH/WFA, peta sebelum presensi, upload lampiran izin, ubah password, dan pengaturan nama/logo aplikasi dari API didokumentasikan di [`docs/api-fitur-baru.md`](docs/api-fitur-baru.md). Dokumen tersebut juga memuat format respons baru dan catatan kompatibilitas untuk endpoint di bawah.
+
 ## 📋 Table of Contents
 
 1. [Base Configuration](#base-configuration)

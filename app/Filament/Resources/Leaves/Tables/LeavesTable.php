@@ -2,10 +2,9 @@
 
 namespace App\Filament\Resources\Leaves\Tables;
 
+use App\Exceptions\LeaveException;
 use App\Models\Leave;
-use App\Models\LeaveBalance;
-use App\Support\WorkdayCalculator;
-use Carbon\Carbon;
+use App\Services\LeaveService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -13,6 +12,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -20,7 +20,6 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class LeavesTable
@@ -68,11 +67,13 @@ class LeavesTable
                         'warning' => 'pending',
                         'success' => 'approved',
                         'danger' => 'rejected',
+                        'gray' => 'cancelled',
                     ])
                     ->formatStateUsing(fn (string $state): string => match ($state) {
                         'pending' => 'Menunggu',
                         'approved' => 'Disetujui',
                         'rejected' => 'Ditolak',
+                        'cancelled' => 'Dibatalkan',
                         default => $state,
                     })
                     ->sortable(),
@@ -112,6 +113,7 @@ class LeavesTable
                         'pending' => 'Menunggu',
                         'approved' => 'Disetujui',
                         'rejected' => 'Ditolak',
+                        'cancelled' => 'Dibatalkan',
                     ]),
 
                 Filter::make('date_range')
@@ -140,113 +142,86 @@ class LeavesTable
 
                 EditAction::make()
                     ->label('Edit')
-                    ->visible(fn (Leave $record) => $record->status === 'pending'),
+                    ->visible(fn (Leave $record) => $record->status === Leave::STATUS_PENDING),
 
                 Action::make('approve')
-                    ->label('Approve')
+                    ->label('Setujui')
                     ->color('success')
                     ->icon('heroicon-o-check')
-                    ->visible(fn (Leave $record) => $record->status === 'pending' && (auth()->user()->role === 'admin' || auth()->user()->role === 'hr'))
+                    ->visible(fn (Leave $record) => $record->status === Leave::STATUS_PENDING && in_array(auth()->user()->role, ['admin', 'hr'], true))
                     ->requiresConfirmation()
-                    ->modalHeading('Approve Leave Request')
-                    ->modalDescription(fn ($record) => 'Employee: '.$record->employee->name."\nLeave Type: ".$record->leaveType->name."\nDates: ".$record->start_date->format('d/m/Y').' - '.$record->end_date->format('d/m/Y'))
-                    ->action(function (Leave $record) {
+                    ->modalHeading('Setujui Pengajuan')
+                    ->modalDescription(fn (Leave $record) => 'Pegawai: '.$record->employee->name.' | Jenis: '.$record->leaveType->name.' | Tanggal: '.$record->start_date->format('d/m/Y').' - '.$record->end_date->format('d/m/Y'))
+                    ->action(function (Leave $record, LeaveService $leaveService) {
                         try {
-                            DB::beginTransaction();
+                            $leaveService->approve($record, auth()->user());
 
-                            // Recalculate total days to ensure consistency with holidays
-                            $totalDays = WorkdayCalculator::countWorkdaysExcludingHolidays(
-                                Carbon::parse($record->start_date),
-                                Carbon::parse($record->end_date)
-                            );
-
-                            $year = $record->start_date->year;
-                            $leaveBalance = LeaveBalance::where('employee_id', $record->employee_id)
-                                ->where('leave_type_id', $record->leave_type_id)
-                                ->where('year', $year)
-                                ->first();
-
-                            // Check if leave balance exists
-                            if (! $leaveBalance) {
-                                DB::rollBack();
-
-                                \Filament\Notifications\Notification::make()
-                                    ->title('Cannot approve leave request')
-                                    ->danger()
-                                    ->body('Leave balance not found for this employee and leave type.')
-                                    ->send();
-
-                                return;
-                            }
-
-                            // Check if remaining days is sufficient
-                            if ($leaveBalance->remaining_days < $totalDays) {
-                                DB::rollBack();
-
-                                \Filament\Notifications\Notification::make()
-                                    ->title('Cannot approve leave request')
-                                    ->danger()
-                                    ->body("Insufficient leave balance. Required: {$totalDays} days, Available: {$leaveBalance->remaining_days} days.")
-                                    ->send();
-
-                                return;
-                            }
-
-                            $record->update([
-                                'status' => 'approved',
-                                'approved_by' => auth()->id(),
-                                'approved_at' => now(),
-                                'total_days' => $totalDays,
-                            ]);
-
-                            $leaveBalance->update([
-                                'used_days' => $leaveBalance->used_days + $totalDays,
-                                'remaining_days' => $leaveBalance->remaining_days - $totalDays,
-                                'last_updated' => now(),
-                            ]);
-
-                            DB::commit();
-
-                            \Filament\Notifications\Notification::make()
-                                ->title('Leave request approved successfully')
+                            Notification::make()
+                                ->title('Pengajuan disetujui')
                                 ->success()
                                 ->send();
-                        } catch (\Exception $e) {
-                            DB::rollBack();
-
-                            \Filament\Notifications\Notification::make()
-                                ->title('Failed to approve leave request')
+                        } catch (LeaveException $exception) {
+                            Notification::make()
+                                ->title('Pengajuan tidak dapat disetujui')
+                                ->body($exception->getMessage())
                                 ->danger()
-                                ->body($e->getMessage())
                                 ->send();
                         }
                     }),
 
                 Action::make('reject')
-                    ->label('Reject')
+                    ->label('Tolak')
                     ->color('danger')
                     ->icon('heroicon-o-x-circle')
-                    ->visible(fn (Leave $record) => $record->status === 'pending' && (auth()->user()->role === 'admin' || auth()->user()->role === 'hr'))
+                    ->visible(fn (Leave $record) => $record->status === Leave::STATUS_PENDING && in_array(auth()->user()->role, ['admin', 'hr'], true))
                     ->form([
                         Textarea::make('notes')
-                            ->label('Rejection Notes')
+                            ->label('Alasan Penolakan')
                             ->rows(3)
                             ->required(),
                     ])
-                    ->modalHeading('Reject Leave Request')
-                    ->modalDescription(fn ($record) => 'Employee: '.$record->employee->name."\nLeave Type: ".$record->leaveType->name)
-                    ->action(function (Leave $record, array $data) {
-                        $record->update([
-                            'status' => 'rejected',
-                            'approved_by' => auth()->id(),
-                            'approved_at' => now(),
-                            'notes' => $data['notes'],
-                        ]);
+                    ->modalHeading('Tolak Pengajuan')
+                    ->modalDescription(fn (Leave $record) => 'Pegawai: '.$record->employee->name.' | Jenis: '.$record->leaveType->name)
+                    ->action(function (Leave $record, array $data, LeaveService $leaveService) {
+                        try {
+                            $leaveService->reject($record, auth()->user(), $data['notes']);
 
-                        \Filament\Notifications\Notification::make()
-                            ->title('Leave request rejected')
-                            ->success()
-                            ->send();
+                            Notification::make()
+                                ->title('Pengajuan ditolak')
+                                ->success()
+                                ->send();
+                        } catch (LeaveException $exception) {
+                            Notification::make()
+                                ->title('Pengajuan tidak dapat ditolak')
+                                ->body($exception->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
+
+                Action::make('revoke')
+                    ->label('Batalkan Persetujuan')
+                    ->color('warning')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->visible(fn (Leave $record) => $record->status === Leave::STATUS_APPROVED && in_array(auth()->user()->role, ['admin', 'hr'], true))
+                    ->requiresConfirmation()
+                    ->modalHeading('Batalkan Persetujuan')
+                    ->modalDescription('Kuota cuti yang sudah terpakai akan dikembalikan.')
+                    ->action(function (Leave $record, LeaveService $leaveService) {
+                        try {
+                            $leaveService->revokeApproval($record);
+
+                            Notification::make()
+                                ->title('Persetujuan dibatalkan dan kuota dikembalikan')
+                                ->success()
+                                ->send();
+                        } catch (LeaveException $exception) {
+                            Notification::make()
+                                ->title('Gagal membatalkan persetujuan')
+                                ->body($exception->getMessage())
+                                ->danger()
+                                ->send();
+                        }
                     }),
             ])
             ->bulkActions([
@@ -255,6 +230,7 @@ class LeavesTable
                         ->visible(fn () => auth()->user()->role === 'admin' || auth()->user()->role === 'hr'),
                 ]),
             ])
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['employee', 'leaveType', 'approver']))
             ->defaultSort('created_at', 'desc')
             ->striped()
             ->paginated([10, 25, 50]);

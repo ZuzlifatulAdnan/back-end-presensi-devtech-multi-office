@@ -20,8 +20,6 @@ class ShiftKerja extends Model
     ];
 
     protected $casts = [
-        'start_time' => 'datetime:H:i',
-        'end_time' => 'datetime:H:i',
         'is_cross_day' => 'boolean',
         'is_active' => 'boolean',
     ];

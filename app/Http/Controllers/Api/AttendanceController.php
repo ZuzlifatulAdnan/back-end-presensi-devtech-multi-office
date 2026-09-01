@@ -3,254 +3,187 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\CheckInRequest;
+use App\Http\Requests\Api\CheckOutRequest;
+use App\Http\Resources\AttendanceResource;
 use App\Models\Attendance;
-use App\Models\ShiftAssignment;
-use App\Models\ShiftKerja;
-use App\Support\WorkdayCalculator;
-use Carbon\Carbon;
+use App\Services\AttendanceService;
+use App\Support\ApiResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class AttendanceController extends Controller
 {
-    // checkin
-    public function checkin(Request $request)
+    public function __construct(private readonly AttendanceService $attendanceService) {}
+
+    /**
+     * Map + eligibility payload rendered before the user presses "Presensi".
+     */
+    public function preCheck(Request $request): JsonResponse
     {
-        // validate lat and long
-        $request->validate([
-            'latitude' => 'required',
-            'longitude' => 'required',
-            'work_mode' => 'nullable|in:wfo,wfh,wfa',
+        $validated = $request->validate([
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
         ]);
 
-        $currentUser = $request->user();
-        $currentDateTime = now();
+        $state = $this->attendanceService->preCheck(
+            $request->user(),
+            isset($validated['latitude']) ? (float) $validated['latitude'] : null,
+            isset($validated['longitude']) ? (float) $validated['longitude'] : null,
+        );
 
-        // Check if already checked in today
-        $existingAttendance = Attendance::where('user_id', $currentUser->id)
-            ->whereDate('date', $currentDateTime->toDateString())
-            ->first();
+        $attendance = $state['attendance'];
+        $state['attendance'] = $attendance ? new AttendanceResource($attendance) : null;
 
-        if ($existingAttendance) {
-            return response(['message' => 'Anda sudah melakukan absen masuk hari ini.'], 400);
-        }
+        return ApiResponse::success($state, 'Status presensi berhasil dimuat.');
+    }
 
-        $workMode = $request->input('work_mode', $currentUser->work_mode ?? 'wfo');
-        $companyId = $currentUser->company_id;
+    /**
+     * Office pins for the map screen, ordered by distance when a position is sent.
+     */
+    public function locations(Request $request): JsonResponse
+    {
+        $state = $this->attendanceService->preCheck(
+            $request->user(),
+            $request->filled('latitude') ? (float) $request->input('latitude') : null,
+            $request->filled('longitude') ? (float) $request->input('longitude') : null,
+        );
 
-        if ($workMode === 'wfo') {
-            $userLat = $request->latitude;
-            $userLon = $request->longitude;
+        return ApiResponse::success([
+            'locations' => $state['locations'],
+            'nearest_location' => $state['nearest_location'],
+            'map' => $state['map'],
+        ], 'Daftar lokasi kantor berhasil dimuat.');
+    }
 
-            $isWithinRadius = false;
+    public function checkin(CheckInRequest $request): JsonResponse
+    {
+        $attendance = $this->attendanceService->checkIn($request->user(), $request->payload());
+        $attendance->load(['shift', 'company']);
 
-            if ($companyId) {
-                $company = \App\Models\Company::find($companyId);
-                if ($company && $company->latitude && $company->longitude && $company->radius_km) {
-                    $distance = $this->calculateDistance($userLat, $userLon, $company->latitude, $company->longitude);
-                    if ($distance <= $company->radius_km) {
-                        $isWithinRadius = true;
-                    }
-                }
-            } else {
-                // If user doesn't have a specific company, check all companies
-                $companies = \App\Models\Company::all();
-                if ($companies->count() > 0) {
-                    foreach ($companies as $company) {
-                        if ($company->latitude && $company->longitude && $company->radius_km) {
-                            $distance = $this->calculateDistance($userLat, $userLon, $company->latitude, $company->longitude);
-                            if ($distance <= $company->radius_km) {
-                                $isWithinRadius = true;
-                                $companyId = $company->id;
-                                break;
-                            }
-                        }
-                    }
-                } else {
-                    // No companies defined, allow checkin
-                    $isWithinRadius = true;
-                }
-            }
+        return response()->json([
+            'success' => true,
+            'message' => 'Absen masuk berhasil.',
+            'data' => new AttendanceResource($attendance),
+            // Legacy key kept so older app builds keep working.
+            'attendance' => new AttendanceResource($attendance),
+        ], 201);
+    }
 
-            if (!$isWithinRadius) {
-                return response(['message' => 'Anda berada di luar radius kantor.'], 400);
-            }
-        }
+    public function checkout(CheckOutRequest $request): JsonResponse
+    {
+        $attendance = $this->attendanceService->checkOut($request->user(), $request->payload());
+        $attendance->load(['shift', 'company']);
 
-        $scheduledShiftId = ShiftAssignment::query()
-            ->forUser($currentUser->id)
-            ->forDate($currentDateTime)
-            ->scheduled()
-            ->value('shift_id');
+        return response()->json([
+            'success' => true,
+            'message' => 'Absen pulang berhasil.',
+            'data' => new AttendanceResource($attendance),
+            'attendance' => new AttendanceResource($attendance),
+        ]);
+    }
 
-        $resolvedShiftId = $scheduledShiftId ?? $currentUser->shift_kerja_id;
-        $activeShift = $resolvedShiftId ? ShiftKerja::query()->find($resolvedShiftId) : null;
+    /**
+     * Today's record together with the next action the app should offer.
+     */
+    public function today(Request $request): JsonResponse
+    {
+        $attendance = $this->attendanceService->findTodayAttendance($request->user());
 
-        $isWeekend = WorkdayCalculator::isWeekend($currentDateTime->copy());
-        $isHoliday = WorkdayCalculator::isHoliday($currentDateTime->copy());
+        return ApiResponse::success([
+            'checkedin' => $attendance !== null,
+            'checkedout' => (bool) $attendance?->isCheckedOut(),
+            'next_action' => match (true) {
+                $attendance === null => 'check_in',
+                ! $attendance->isCheckedOut() => 'check_out',
+                default => 'done',
+            },
+            'attendance' => $attendance ? new AttendanceResource($attendance) : null,
+        ], 'Status presensi hari ini berhasil dimuat.');
+    }
 
-        $status = 'on_time';
-        $lateMinutes = 0;
+    /**
+     * Legacy endpoint kept for older app builds.
+     */
+    public function isCheckedin(Request $request): JsonResponse
+    {
+        $attendance = $this->attendanceService->findTodayAttendance($request->user());
 
-        if ($activeShift) {
-            $startTimeString = $activeShift->getRawOriginal('start_time') ?? $activeShift->start_time?->format('H:i:s');
+        return response()->json([
+            'success' => true,
+            'checkedin' => $attendance !== null,
+            'checkedout' => (bool) $attendance?->isCheckedOut(),
+            'data' => $attendance ? new AttendanceResource($attendance) : null,
+        ]);
+    }
 
-            if ($startTimeString) {
-                $normalizedStartTime = strlen($startTimeString) === 5 ? $startTimeString.':00' : $startTimeString;
-                $shiftStart = Carbon::createFromFormat(
-                    'Y-m-d H:i:s',
-                    $currentDateTime->toDateString().' '.$normalizedStartTime,
-                    config('app.timezone')
-                );
-
-                if ($activeShift->is_cross_day && $currentDateTime->lessThan($shiftStart)) {
-                    $shiftStart->subDay();
-                }
-
-                $graceMinutes = (int) ($activeShift->grace_period_minutes ?? 0);
-                $lateThreshold = $shiftStart->copy()->addMinutes($graceMinutes);
-
-                if ($currentDateTime->greaterThan($lateThreshold)) {
-                    $status = 'late';
-                    $lateMinutes = (int) $lateThreshold->diffInMinutes($currentDateTime);
-                }
-            }
-        }
-
-        $attendance = Attendance::create([
-            'user_id' => $currentUser->id,
-            'shift_id' => $activeShift?->id,
-            'company_id' => $companyId,
-            'date' => $currentDateTime->toDateString(),
-            'time_in' => $currentDateTime->toTimeString(),
-            'latlon_in' => $request->latitude.','.$request->longitude,
-            'status' => $status,
-            'work_mode' => $workMode,
-            'is_weekend' => $isWeekend,
-            'is_holiday' => $isHoliday,
-            'holiday_work' => $activeShift ? ($isWeekend || $isHoliday) : false,
-            'late_minutes' => $lateMinutes,
+    /**
+     * Attendance history. Paginated when the caller asks for a page, otherwise
+     * the most recent records are returned in one payload.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'month' => ['nullable', 'integer', 'between:1,12'],
+            'year' => ['nullable', 'integer', 'between:2000,2100'],
+            'status' => ['nullable', Rule::in([Attendance::STATUS_ON_TIME, Attendance::STATUS_LATE, Attendance::STATUS_ABSENT])],
+            'work_mode' => ['nullable', Rule::in(Attendance::MODES)],
+            'per_page' => ['nullable', 'integer', 'between:1,200'],
+            'page' => ['nullable', 'integer', 'min:1'],
         ]);
 
-        return response([
-            'message' => 'Checkin success',
-            'attendance' => $attendance,
-        ], 200);
+        $query = Attendance::query()
+            ->with(['shift', 'company'])
+            ->forUser($request->user()->id)
+            ->when($validated['date'] ?? null, fn ($q, $date) => $q->onDate($date))
+            ->when($validated['from'] ?? null, fn ($q, $from) => $q->whereDate('date', '>=', $from))
+            ->when($validated['to'] ?? null, fn ($q, $to) => $q->whereDate('date', '<=', $to))
+            ->when($validated['month'] ?? null, fn ($q, $month) => $q->whereMonth('date', $month))
+            ->when($validated['year'] ?? null, fn ($q, $year) => $q->whereYear('date', $year))
+            ->when($validated['status'] ?? null, fn ($q, $status) => $q->where('status', $status))
+            ->when($validated['work_mode'] ?? null, fn ($q, $mode) => $q->where('work_mode', $mode))
+            ->orderByDesc('date')
+            ->orderByDesc('time_in');
+
+        if ($request->hasAny(['page', 'per_page'])) {
+            $paginated = $query->paginate((int) ($validated['per_page'] ?? 25));
+
+            return ApiResponse::success(
+                AttendanceResource::collection($paginated),
+                'Riwayat presensi berhasil dimuat.'
+            );
+        }
+
+        $records = $query->limit(500)->get();
+
+        return ApiResponse::success(
+            AttendanceResource::collection($records),
+            'Riwayat presensi berhasil dimuat.',
+            200,
+            ['total' => $records->count()]
+        );
     }
 
-    // checkout
-    public function checkout(Request $request)
+    /**
+     * Monthly recap for the app dashboard.
+     */
+    public function summary(Request $request): JsonResponse
     {
-        // validate lat and long
-        $request->validate([
-            'latitude' => 'required',
-            'longitude' => 'required',
+        $validated = $request->validate([
+            'month' => ['nullable', 'integer', 'between:1,12'],
+            'year' => ['nullable', 'integer', 'between:2000,2100'],
         ]);
 
-        // get today attendance
-        $today = now();
+        $summary = $this->attendanceService->monthlySummary(
+            $request->user(),
+            (int) ($validated['year'] ?? now()->year),
+            (int) ($validated['month'] ?? now()->month),
+        );
 
-        $attendance = Attendance::where('user_id', $request->user()->id)
-            ->whereDate('date', $today)
-            ->first();
-
-        // check if attendance not found
-        if (! $attendance) {
-            return response(['message' => 'Checkin first'], 400);
-        }
-
-        // validate checkout location if WFO
-        if ($attendance->work_mode === 'wfo') {
-            $userLat = $request->latitude;
-            $userLon = $request->longitude;
-            $isWithinRadius = false;
-
-            if ($attendance->company_id) {
-                $company = \App\Models\Company::find($attendance->company_id);
-                if ($company && $company->latitude && $company->longitude && $company->radius_km) {
-                    $distance = $this->calculateDistance($userLat, $userLon, $company->latitude, $company->longitude);
-                    if ($distance <= $company->radius_km) {
-                        $isWithinRadius = true;
-                    }
-                }
-            } else {
-                $companies = \App\Models\Company::all();
-                if ($companies->count() > 0) {
-                    foreach ($companies as $company) {
-                        if ($company->latitude && $company->longitude && $company->radius_km) {
-                            $distance = $this->calculateDistance($userLat, $userLon, $company->latitude, $company->longitude);
-                            if ($distance <= $company->radius_km) {
-                                $isWithinRadius = true;
-                                break;
-                            }
-                        }
-                    }
-                } else {
-                    $isWithinRadius = true;
-                }
-            }
-
-            if (!$isWithinRadius) {
-                return response(['message' => 'Anda berada di luar radius kantor untuk checkout.'], 400);
-            }
-        }
-
-        // save checkout
-        $attendance->time_out = now()->toTimeString();
-        $attendance->latlon_out = $request->latitude.','.$request->longitude;
-        $attendance->save();
-
-        return response([
-            'message' => 'Checkout success',
-            'attendance' => $attendance,
-        ], 200);
-    }
-
-    // check is checkedin
-    public function isCheckedin(Request $request)
-    {
-        // get today attendance
-        $attendance = Attendance::where('user_id', $request->user()->id)
-            ->whereDate('date', now())
-            ->first();
-
-        $isCheckout = $attendance ? $attendance->time_out : false;
-
-        return response([
-            'checkedin' => $attendance ? true : false,
-            'checkedout' => $isCheckout ? true : false,
-        ], 200);
-    }
-
-    // index
-    public function index(Request $request)
-    {
-        $date = $request->input('date');
-
-        $currentUser = $request->user();
-
-        $query = Attendance::where('user_id', $currentUser->id);
-
-        if ($date) {
-            $query->where('date', $date);
-        }
-
-        $attendance = $query->get();
-
-        return response([
-            'message' => 'Success',
-            'data' => $attendance,
-        ], 200);
-    }
-
-    private function calculateDistance($lat1, $lon1, $lat2, $lon2)
-    {
-        $earthRadius = 6371; // Earth's radius in kilometers
-        $dLat = deg2rad($lat2 - $lat1);
-        $dLon = deg2rad($lon2 - $lon1);
-        $a = sin($dLat / 2) * sin($dLat / 2) +
-             cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
-             sin($dLon / 2) * sin($dLon / 2);
-        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
-        return $earthRadius * $c;
+        return ApiResponse::success($summary, 'Rekap presensi berhasil dimuat.');
     }
 }

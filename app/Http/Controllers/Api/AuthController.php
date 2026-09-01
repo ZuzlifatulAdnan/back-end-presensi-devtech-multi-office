@@ -3,50 +3,130 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\LoginRequest;
+use App\Http\Resources\AppSettingResource;
+use App\Http\Resources\CompanyResource;
 use App\Http\Resources\UserResource;
+use App\Models\AppSetting;
 use App\Models\User;
+use App\Support\ApiResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
-    // login
-    public function login(Request $request)
+    private const PROFILE_RELATIONS = ['shiftKerja', 'departemen', 'jabatan', 'company'];
+
+    public function login(LoginRequest $request): JsonResponse
     {
-        $loginData = $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
+        $request->ensureIsNotRateLimited();
+
+        $user = User::query()
+            ->with(self::PROFILE_RELATIONS)
+            ->where('email', $request->validated('email'))
+            ->first();
+
+        if (! $user || ! Hash::check($request->validated('password'), $user->password)) {
+            $request->hitRateLimiter();
+
+            return ApiResponse::error('Email atau password salah.', 401);
+        }
+
+        $request->clearRateLimiter();
+
+        if ($fcmToken = $request->validated('fcm_token')) {
+            $user->forceFill(['fcm_token' => $fcmToken])->save();
+        }
+
+        $token = $user->createToken($request->validated('device_name') ?: 'auth_token')->plainTextToken;
+
+        return response()->json(
+            array_merge(
+                ['success' => true, 'message' => 'Login berhasil.', 'token' => $token],
+                $this->profilePayload($user)
+            )
+        );
+    }
+
+    public function logout(Request $request): JsonResponse
+    {
+        $request->user()->currentAccessToken()?->delete();
+
+        return ApiResponse::success(null, 'Berhasil keluar.');
+    }
+
+    /**
+     * Sign out of every device at once.
+     */
+    public function logoutAll(Request $request): JsonResponse
+    {
+        $request->user()->tokens()->delete();
+
+        return ApiResponse::success(null, 'Berhasil keluar dari semua perangkat.');
+    }
+
+    public function me(Request $request): JsonResponse
+    {
+        $user = $request->user()->load(self::PROFILE_RELATIONS);
+
+        return response()->json(
+            array_merge(['success' => true, 'message' => 'Data profil berhasil dimuat.'], $this->profilePayload($user))
+        );
+    }
+
+    /**
+     * Store the face embedding captured during enrollment.
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'face_embedding' => ['required', 'string'],
+        ], [
+            'face_embedding.required' => 'Data wajah wajib dikirim.',
         ]);
 
-        $user = User::where('email', $loginData['email'])->first();
+        $user = $request->user();
+        $user->forceFill(['face_embedding' => $validated['face_embedding']])->save();
 
-        // check user exist
-        if (! $user) {
-            return response(['message' => 'Invalid credentials'], 401);
-        }
+        return ApiResponse::success(
+            new UserResource($user->load(self::PROFILE_RELATIONS)),
+            'Data wajah berhasil diperbarui.'
+        );
+    }
 
-        // check password
-        if (! Hash::check($loginData['password'], $user->password)) {
-            return response(['message' => 'Invalid credentials'], 401);
-        }
+    public function updateFcmToken(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'fcm_token' => ['required', 'string', 'max:512'],
+        ], [
+            'fcm_token.required' => 'FCM token wajib dikirim.',
+        ]);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $request->user()->forceFill(['fcm_token' => $validated['fcm_token']])->save();
 
-        // Load relationships
-        $user->load(['shiftKerja', 'departemen', 'jabatan', 'company']);
+        return ApiResponse::success(null, 'FCM token berhasil diperbarui.');
+    }
 
-        $response = [
+    /**
+     * Shared login/me payload. Nested keys are the modern contract; the flat
+     * keys are kept because existing app builds read them directly.
+     *
+     * @return array<string, mixed>
+     */
+    private function profilePayload(User $user): array
+    {
+        $settings = AppSetting::current();
+
+        return [
+            'data' => [
+                'user' => new UserResource($user),
+                'app' => new AppSettingResource($settings),
+            ],
             'user' => new UserResource($user),
-            'token' => $token,
             'role' => $user->role,
             'work_mode' => $user->work_mode,
-            'company' => $user->company ? [
-                'id' => $user->company->id,
-                'name' => $user->company->name,
-                'latitude' => $user->company->latitude,
-                'longitude' => $user->company->longitude,
-                'radius_km' => $user->company->radius_km,
-            ] : null,
+            'company' => $user->company ? new CompanyResource($user->company) : null,
             'position' => $user->jabatan ? [
                 'id' => $user->jabatan->id,
                 'name' => $user->jabatan->name,
@@ -66,97 +146,5 @@ class AuthController extends Controller
                 'name' => $user->departemen->name,
             ] : null,
         ];
-
-        return response($response, 200);
-    }
-
-    // logout
-    public function logout(Request $request)
-    {
-        $request->user()->currentAccessToken()->delete();
-
-        return response(['message' => 'Logged out'], 200);
-    }
-
-    // update image profile & face_embedding
-    public function updateProfile(Request $request)
-    {
-        $request->validate([
-            // 'image' => 'required|image|mimes:jpeg,png,jpg|max:2048',
-            'face_embedding' => 'required',
-        ]);
-
-        $user = $request->user();
-        // $image = $request->file('image');
-        $face_embedding = $request->face_embedding;
-
-        // //save image
-        // $image->storeAs('public/images', $image->hashName());
-        // $user->image_url = $image->hashName();
-        $user->face_embedding = $face_embedding;
-        $user->save();
-
-        return response([
-            'message' => 'Profile updated',
-            'user' => new UserResource($user),
-        ], 200);
-    }
-
-    // update fcm token
-    public function updateFcmToken(Request $request)
-    {
-        $request->validate([
-            'fcm_token' => 'required',
-        ]);
-
-        $user = $request->user();
-        $user->fcm_token = $request->fcm_token;
-        $user->save();
-
-        return response([
-            'message' => 'FCM token updated',
-        ], 200);
-    }
-
-    // get current user data
-    public function me(Request $request)
-    {
-        $user = $request->user();
-
-        // Load relationships
-        $user->load(['shiftKerja', 'departemen', 'jabatan', 'company']);
-
-        $response = [
-            'user' => new UserResource($user),
-            'role' => $user->role,
-            'work_mode' => $user->work_mode,
-            'company' => $user->company ? [
-                'id' => $user->company->id,
-                'name' => $user->company->name,
-                'latitude' => $user->company->latitude,
-                'longitude' => $user->company->longitude,
-                'radius_km' => $user->company->radius_km,
-            ] : null,
-            'position' => $user->jabatan ? [
-                'id' => $user->jabatan->id,
-                'name' => $user->jabatan->name,
-            ] : null,
-            'default_shift' => $user->shiftKerja ? [
-                'id' => $user->shiftKerja->id,
-                'name' => $user->shiftKerja->name,
-            ] : null,
-            'default_shift_detail' => $user->shiftKerja ? [
-                'id' => $user->shiftKerja->id,
-                'name' => $user->shiftKerja->name,
-                'start_time' => $user->shiftKerja->start_time,
-                'end_time' => $user->shiftKerja->end_time,
-            ] : null,
-            'department' => $user->departemen ? [
-                'id' => $user->departemen->id,
-                'name' => $user->departemen->name,
-            ] : null,
-        ];
-
-        return response($response, 200);
     }
 }

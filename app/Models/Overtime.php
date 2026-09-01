@@ -23,9 +23,7 @@ class Overtime extends Model
     ];
 
     protected $casts = [
-        'date' => 'date',
-        'start_time' => 'datetime:H:i',
-        'end_time' => 'datetime:H:i',
+        'date' => 'date:Y-m-d',
         'approved_at' => 'datetime',
     ];
 

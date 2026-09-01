@@ -2,12 +2,17 @@
 
 namespace App\Filament\Resources\Attendances\Schemas;
 
+use App\Models\Attendance;
 use App\Models\User;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\TimePicker;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Unique;
 
 class AttendanceForm
 {
@@ -26,7 +31,13 @@ class AttendanceForm
                     ->label('Tanggal')
                     ->required()
                     ->default(now())
-                    ->native(false),
+                    ->native(false)
+                    ->rule(fn (?Attendance $record, Get $get): Unique => Rule::unique('attendances', 'date')
+                        ->where('user_id', $get('user_id'))
+                        ->ignore($record))
+                    ->validationMessages([
+                        'unique' => 'Pegawai ini sudah memiliki data absensi pada tanggal tersebut.',
+                    ]),
                 TimePicker::make('time_in')
                     ->label('Jam Masuk')
                     ->required()
@@ -51,7 +62,19 @@ class AttendanceForm
                 Select::make('company_id')
                     ->relationship('company', 'name')
                     ->label('Kantor / Lokasi')
-                    ->required(),
+                    ->searchable()
+                    ->preload()
+                    ->helperText('Kosongkan untuk presensi WFH/WFA.'),
+                Textarea::make('notes_in')
+                    ->label('Catatan Aktivitas (Masuk)')
+                    ->rows(3)
+                    ->maxLength(1000)
+                    ->columnSpanFull(),
+                Textarea::make('notes_out')
+                    ->label('Catatan Aktivitas (Pulang)')
+                    ->rows(3)
+                    ->maxLength(1000)
+                    ->columnSpanFull(),
             ]);
     }
 }

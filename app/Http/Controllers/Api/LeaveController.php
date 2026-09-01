@@ -3,282 +3,225 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\StoreLeaveRequest;
+use App\Http\Requests\Api\UpdateLeaveRequest;
+use App\Http\Resources\LeaveResource;
 use App\Models\Leave;
 use App\Models\LeaveBalance;
 use App\Models\LeaveType;
-use App\Support\WorkdayCalculator;
-use Carbon\Carbon;
+use App\Services\LeaveService;
+use App\Support\ApiResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class LeaveController extends Controller
 {
-    // Get all leave types
-    public function getLeaveTypes()
+    public function __construct(private readonly LeaveService $leaveService) {}
+
+    /**
+     * Types of izin / cuti the employee can pick from.
+     */
+    public function getLeaveTypes(): JsonResponse
     {
-        $leaveTypes = LeaveType::all();
+        $leaveTypes = LeaveType::query()->orderBy('name')->get([
+            'id', 'name', 'quota_days', 'is_paid',
+        ]);
 
         return response()->json([
-            'message' => 'Leave types retrieved successfully',
+            'success' => true,
+            'message' => 'Jenis izin/cuti berhasil dimuat.',
             'data' => $leaveTypes,
-        ], 200);
+        ]);
     }
 
-    // Get leave balance for current user
-    public function getBalance(Request $request)
+    public function getBalance(Request $request): JsonResponse
     {
-        $year = $request->query('year', now()->year);
-        $userId = $request->user()->id;
+        $validated = $request->validate([
+            'year' => ['nullable', 'integer', 'between:2000,2100'],
+        ]);
 
-        $balances = LeaveBalance::where('employee_id', $userId)
-            ->where('year', $year)
-            ->with('leaveType')
+        $balances = LeaveBalance::query()
+            ->with('leaveType:id,name,is_paid')
+            ->where('employee_id', $request->user()->id)
+            ->where('year', (int) ($validated['year'] ?? now()->year))
             ->get();
 
         return response()->json([
-            'message' => 'Leave balance retrieved successfully',
+            'success' => true,
+            'message' => 'Sisa kuota berhasil dimuat.',
             'data' => $balances,
-        ], 200);
+        ]);
     }
 
-    // Get all leaves for current user
-    public function index(Request $request)
-    {
-        $userId = $request->user()->id;
-        $status = $request->query('status');
-
-        $query = Leave::where('employee_id', $userId)
-            ->with(['leaveType', 'approver']);
-
-        if ($status) {
-            $query->where('status', $status);
-        }
-
-        $leaves = $query->orderBy('created_at', 'desc')->get();
-
-        return response()->json([
-            'message' => 'Leaves retrieved successfully',
-            'data' => $leaves,
-        ], 200);
-    }
-
-    // Get leave by ID
-    public function show($id)
-    {
-        $leave = Leave::with(['employee', 'leaveType', 'approver'])->findOrFail($id);
-
-        return response()->json([
-            'message' => 'Leave retrieved successfully',
-            'data' => $leave,
-        ], 200);
-    }
-
-    // Create leave request
-    public function store(Request $request)
+    public function index(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'leave_type_id' => 'required|exists:leave_types,id',
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
-            'reason' => 'nullable|string',
-            'attachment' => 'nullable|file|max:2048', // Max 2MB
+            'status' => ['nullable', Rule::in(Leave::STATUSES)],
+            'year' => ['nullable', 'integer', 'between:2000,2100'],
+            'per_page' => ['nullable', 'integer', 'between:1,100'],
+            'page' => ['nullable', 'integer', 'min:1'],
         ]);
 
-        $userId = $request->user()->id;
+        $query = Leave::query()
+            ->with(['leaveType', 'approver'])
+            ->forEmployee($request->user()->id)
+            ->when($validated['status'] ?? null, fn ($q, $status) => $q->where('status', $status))
+            ->when($validated['year'] ?? null, fn ($q, $year) => $q->whereYear('start_date', $year))
+            ->orderByDesc('created_at');
 
-        // Calculate total days excluding weekends and holidays
-        $startDate = Carbon::parse($validated['start_date']);
-        $endDate = Carbon::parse($validated['end_date']);
-        $totalDays = WorkdayCalculator::countWorkdaysExcludingHolidays($startDate, $endDate);
-
-        // Check leave balance
-        $year = $startDate->year;
-        $leaveBalance = LeaveBalance::where('employee_id', $userId)
-            ->where('leave_type_id', $validated['leave_type_id'])
-            ->where('year', $year)
-            ->first();
-
-        if (! $leaveBalance) {
-            return response()->json([
-                'message' => 'Leave balance not found for this leave type',
-            ], 400);
-        }
-
-        if ($leaveBalance->remaining_days < $totalDays) {
-            return response()->json([
-                'message' => 'Insufficient leave balance',
-                'remaining_days' => $leaveBalance->remaining_days,
-                'requested_days' => $totalDays,
-            ], 400);
-        }
-
-        $validated['employee_id'] = $userId;
-        $validated['total_days'] = $totalDays;
-        $validated['status'] = 'pending';
-
-        // Handle attachment upload if provided
-        if ($request->hasFile('attachment')) {
-            $path = $request->file('attachment')->store('leave_attachments', 'public');
-            $validated['attachment_url'] = $path;
-        }
-
-        $leave = Leave::create($validated);
-
-        return response()->json([
-            'message' => 'Leave request created successfully',
-            'data' => $leave->load(['employee', 'leaveType']),
-        ], 201);
-    }
-
-    // Update leave request (only if pending)
-    public function update(Request $request, $id)
-    {
-        $leave = Leave::findOrFail($id);
-
-        // Only allow update if status is pending
-        if ($leave->status !== 'pending') {
-            return response()->json([
-                'message' => 'Cannot update leave request that has been processed',
-            ], 400);
-        }
-
-        // Only allow owner to update
-        if ($leave->employee_id !== $request->user()->id) {
-            return response()->json([
-                'message' => 'Unauthorized',
-            ], 403);
-        }
-
-        $validated = $request->validate([
-            'leave_type_id' => 'sometimes|exists:leave_types,id',
-            'start_date' => 'sometimes|date',
-            'end_date' => 'sometimes|date|after_or_equal:start_date',
-            'reason' => 'nullable|string',
-            'attachment_url' => 'nullable|string',
-        ]);
-
-        // Recalculate total days if dates changed
-        if (isset($validated['start_date']) || isset($validated['end_date'])) {
-            $startDate = Carbon::parse($validated['start_date'] ?? $leave->start_date);
-            $endDate = Carbon::parse($validated['end_date'] ?? $leave->end_date);
-            $validated['total_days'] = WorkdayCalculator::countWorkdaysExcludingHolidays($startDate, $endDate);
-        }
-
-        $leave->update($validated);
-
-        return response()->json([
-            'message' => 'Leave request updated successfully',
-            'data' => $leave->load(['employee', 'leaveType']),
-        ], 200);
-    }
-
-    // Cancel leave request (only if pending)
-    public function cancel($id, Request $request)
-    {
-        $leave = Leave::findOrFail($id);
-
-        // Only allow cancel if status is pending
-        if ($leave->status !== 'pending') {
-            return response()->json([
-                'message' => 'Cannot cancel leave request that has been processed',
-            ], 400);
-        }
-
-        // Only allow owner to cancel
-        if ($leave->employee_id !== $request->user()->id) {
-            return response()->json([
-                'message' => 'Unauthorized',
-            ], 403);
-        }
-
-        $leave->update(['status' => 'cancelled']);
-
-        return response()->json([
-            'message' => 'Leave request cancelled successfully',
-            'data' => $leave,
-        ], 200);
-    }
-
-    public function approve($id)
-    {
-        try {
-            DB::beginTransaction();
-
-            $leave = Leave::findOrFail($id);
-
-            if ($leave->status !== 'pending') {
-                return response()->json([
-                    'message' => 'Leave request has already been processed',
-                ], 400);
-            }
-
-            // Recalculate total days to ensure consistency with holidays
-            $totalDays = WorkdayCalculator::countWorkdaysExcludingHolidays(
-                Carbon::parse($leave->start_date),
-                Carbon::parse($leave->end_date)
+        if ($request->hasAny(['page', 'per_page'])) {
+            return ApiResponse::success(
+                LeaveResource::collection($query->paginate((int) ($validated['per_page'] ?? 25))),
+                'Daftar pengajuan berhasil dimuat.'
             );
-
-            // Update leave status
-            $leave->update([
-                'status' => 'approved',
-                'approved_by' => auth()->id(),
-                'approved_at' => now(),
-                'total_days' => $totalDays,
-            ]);
-
-            // Update leave balance
-            $year = $leave->start_date->year;
-            $leaveBalance = LeaveBalance::where('employee_id', $leave->employee_id)
-                ->where('leave_type_id', $leave->leave_type_id)
-                ->where('year', $year)
-                ->firstOrFail();
-
-            $leaveBalance->update([
-                'used_days' => $leaveBalance->used_days + $leave->total_days,
-                'remaining_days' => $leaveBalance->remaining_days - $leave->total_days,
-                'last_updated' => now(),
-            ]);
-
-            DB::commit();
-
-            return response()->json([
-                'message' => 'Leave request approved successfully',
-                'data' => $leave->load(['employee', 'leaveType', 'approver']),
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return response()->json([
-                'message' => 'Failed to approve leave request',
-                'error' => $e->getMessage(),
-            ], 500);
         }
+
+        $leaves = $query->limit(300)->get();
+
+        return ApiResponse::success(
+            LeaveResource::collection($leaves),
+            'Daftar pengajuan berhasil dimuat.',
+            200,
+            ['total' => $leaves->count()]
+        );
     }
 
-    public function reject(Request $request, $id)
+    public function show(Request $request, int $id): JsonResponse
     {
-        $validated = $request->validate([
-            'notes' => 'nullable|string',
-        ]);
+        $leave = Leave::query()->with(['leaveType', 'approver', 'employee'])->find($id);
 
-        $leave = Leave::findOrFail($id);
-
-        if ($leave->status !== 'pending') {
-            return response()->json([
-                'message' => 'Leave request has already been processed',
-            ], 400);
+        if (! $leave) {
+            return ApiResponse::error('Pengajuan tidak ditemukan.', 404);
         }
 
-        $leave->update([
-            'status' => 'rejected',
-            'approved_by' => auth()->id(),
-            'approved_at' => now(),
-            'notes' => $validated['notes'] ?? null,
+        if (! $this->canAccess($request, $leave)) {
+            return ApiResponse::error('Anda tidak berhak mengakses pengajuan ini.', 403);
+        }
+
+        return ApiResponse::success(new LeaveResource($leave), 'Detail pengajuan berhasil dimuat.');
+    }
+
+    /**
+     * Submit an izin / cuti request, optionally with a supporting document.
+     */
+    public function store(StoreLeaveRequest $request): JsonResponse
+    {
+        $leave = $this->leaveService->create(
+            $request->user(),
+            $request->validated(),
+            $request->file('attachment')
+        );
+
+        return ApiResponse::success(
+            new LeaveResource($leave->load(['leaveType', 'employee'])),
+            'Pengajuan berhasil dikirim.',
+            201
+        );
+    }
+
+    public function update(UpdateLeaveRequest $request, int $id): JsonResponse
+    {
+        $leave = Leave::query()->with('employee')->find($id);
+
+        if (! $leave) {
+            return ApiResponse::error('Pengajuan tidak ditemukan.', 404);
+        }
+
+        if ($leave->employee_id !== $request->user()->id) {
+            return ApiResponse::error('Anda hanya dapat mengubah pengajuan milik sendiri.', 403);
+        }
+
+        $leave = $this->leaveService->update(
+            $leave,
+            $request->validated(),
+            $request->file('attachment'),
+            (bool) $request->boolean('remove_attachment')
+        );
+
+        return ApiResponse::success(
+            new LeaveResource($leave->load(['leaveType', 'employee'])),
+            'Pengajuan berhasil diperbarui.'
+        );
+    }
+
+    public function cancel(Request $request, int $id): JsonResponse
+    {
+        $leave = Leave::query()->find($id);
+
+        if (! $leave) {
+            return ApiResponse::error('Pengajuan tidak ditemukan.', 404);
+        }
+
+        if ($leave->employee_id !== $request->user()->id) {
+            return ApiResponse::error('Anda hanya dapat membatalkan pengajuan milik sendiri.', 403);
+        }
+
+        $leave = $this->leaveService->cancel($leave);
+
+        return ApiResponse::success(
+            new LeaveResource($leave->load('leaveType')),
+            'Pengajuan berhasil dibatalkan.'
+        );
+    }
+
+    /**
+     * Approvals are performed by an approver role; the admin panel uses the same
+     * service so balances stay consistent.
+     */
+    public function approve(Request $request, int $id): JsonResponse
+    {
+        if (! $this->isApprover($request)) {
+            return ApiResponse::error('Anda tidak berhak menyetujui pengajuan.', 403);
+        }
+
+        $leave = Leave::query()->find($id);
+
+        if (! $leave) {
+            return ApiResponse::error('Pengajuan tidak ditemukan.', 404);
+        }
+
+        $leave = $this->leaveService->approve($leave, $request->user());
+
+        return ApiResponse::success(
+            new LeaveResource($leave->load(['leaveType', 'employee', 'approver'])),
+            'Pengajuan disetujui.'
+        );
+    }
+
+    public function reject(Request $request, int $id): JsonResponse
+    {
+        if (! $this->isApprover($request)) {
+            return ApiResponse::error('Anda tidak berhak menolak pengajuan.', 403);
+        }
+
+        $validated = $request->validate([
+            'notes' => ['required', 'string', 'max:1000'],
+        ], [
+            'notes.required' => 'Alasan penolakan wajib diisi.',
         ]);
 
-        return response()->json([
-            'message' => 'Leave request rejected successfully',
-            'data' => $leave->load(['employee', 'leaveType', 'approver']),
-        ]);
+        $leave = Leave::query()->find($id);
+
+        if (! $leave) {
+            return ApiResponse::error('Pengajuan tidak ditemukan.', 404);
+        }
+
+        $leave = $this->leaveService->reject($leave, $request->user(), $validated['notes']);
+
+        return ApiResponse::success(
+            new LeaveResource($leave->load(['leaveType', 'employee', 'approver'])),
+            'Pengajuan ditolak.'
+        );
+    }
+
+    private function canAccess(Request $request, Leave $leave): bool
+    {
+        return $leave->employee_id === $request->user()->id || $this->isApprover($request);
+    }
+
+    private function isApprover(Request $request): bool
+    {
+        return in_array($request->user()->role, ['admin', 'manager', 'hr'], true);
     }
 }

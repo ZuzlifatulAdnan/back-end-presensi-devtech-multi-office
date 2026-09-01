@@ -6,6 +6,8 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ViewAction;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -96,6 +98,29 @@ class AttendancesTable
                     ->placeholder('No Shift')
                     ->sortable()
                     ->searchable(),
+                ImageColumn::make('photo_in')
+                    ->label('Bukti Masuk')
+                    ->disk('public')
+                    ->circular()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('notes_in')
+                    ->label('Catatan WFH')
+                    ->limit(40)
+                    ->tooltip(fn ($record) => $record->notes_in)
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('distance_in_meters')
+                    ->label('Jarak Masuk')
+                    ->formatStateUsing(fn (?int $state): string => $state === null ? '-' : number_format($state).' m')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                IconColumn::make('is_mock_location')
+                    ->label('Fake GPS')
+                    ->boolean()
+                    ->trueIcon('heroicon-o-exclamation-triangle')
+                    ->falseIcon('heroicon-o-check-circle')
+                    ->trueColor('danger')
+                    ->falseColor('success')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('latlon_in')
                     ->label('Lokasi Masuk')
                     ->limit(20)
@@ -166,6 +191,10 @@ class AttendancesTable
                     ->relationship('company', 'name')
                     ->searchable()
                     ->preload(),
+                Filter::make('is_mock_location')
+                    ->label('Terindikasi Fake GPS')
+                    ->query(fn (Builder $query): Builder => $query->where('is_mock_location', true))
+                    ->toggle(),
             ])
             ->recordActions([
                 ViewAction::make(),
@@ -250,6 +279,7 @@ class AttendancesTable
                     DeleteBulkAction::make(),
                 ]),
             ])
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['user', 'shift', 'company']))
             ->defaultSort('date', 'desc');
     }
 }

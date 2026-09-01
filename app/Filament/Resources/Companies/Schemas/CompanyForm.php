@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Companies\Schemas;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -65,6 +66,11 @@ class CompanyForm
                                     ->maxValue(10)
                                     ->helperText('Radius check-in yang diizinkan'),
                             ]),
+
+                        Toggle::make('is_active')
+                            ->label('Lokasi Aktif')
+                            ->default(true)
+                            ->helperText('Lokasi non-aktif tidak dipakai untuk validasi radius presensi.'),
 
                         Select::make('attendance_type')
                             ->label('Metode Presensi')

@@ -65,17 +65,21 @@ class LeaveForm
                     ])
                     ->columns(2),
 
-                // Section::make('Supporting Document')
-                //     ->schema([
-                //         FileUpload::make('attachment_url')
-                //             ->label('Attachment')
-                //             ->image()
-                //             ->directory('leave-attachments')
-                //             ->visibility('private')
-                //             ->downloadable()
-                //             ->openable()
-                //             ->columnSpanFull(),
-                //     ]),
+                Section::make('Dokumen Pendukung')
+                    ->description('Surat dokter, surat tugas, atau bukti lain (JPG, PNG, WEBP, PDF - maks 5 MB).')
+                    ->schema([
+                        FileUpload::make('attachment_url')
+                            ->label('Lampiran')
+                            ->disk('public')
+                            ->directory('leave-attachments')
+                            ->visibility('public')
+                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'])
+                            ->maxSize(5120)
+                            ->downloadable()
+                            ->openable()
+                            ->previewable()
+                            ->columnSpanFull(),
+                    ]),
 
                 Section::make('Status Persetujuan')
                     ->schema([
@@ -85,6 +89,7 @@ class LeaveForm
                                 'pending' => 'Menunggu',
                                 'approved' => 'Disetujui',
                                 'rejected' => 'Ditolak',
+                                'cancelled' => 'Dibatalkan',
                             ])
                             ->default('pending')
                             ->disabled(fn ($record) => $record === null)

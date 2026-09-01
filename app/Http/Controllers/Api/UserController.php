@@ -3,112 +3,101 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use App\Http\Requests\Api\UpdatePasswordRequest;
+use App\Http\Requests\Api\UpdateProfileRequest;
+use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Support\ApiResponse;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Storage;
 
 class UserController extends Controller
 {
-    //get by user id
-    public function getUserId($id)
+    private const PROFILE_RELATIONS = ['company', 'shiftKerja', 'departemen', 'jabatan'];
+
+    /**
+     * A user may only read their own profile; managers and admins may read any.
+     */
+    public function getUserId(Request $request, int $id): JsonResponse
     {
-        $user = User::with(['company', 'shiftKerja', 'departemen', 'jabatan'])->find($id);
-        
-        if (!$user) {
-            return response(['status' => 'Error', 'message' => 'User not found'], 404);
+        $currentUser = $request->user();
+
+        if ($currentUser->id !== $id && ! in_array($currentUser->role, ['admin', 'manager', 'hr'], true)) {
+            return ApiResponse::error('Anda tidak berhak mengakses data pengguna ini.', 403);
         }
 
-        return response([
-            'status' => 'Success',
-            'message' => 'User found',
-            'data' => [
-                'user' => new \App\Http\Resources\UserResource($user),
-                'role' => $user->role,
-                'work_mode' => $user->work_mode,
-                'company' => $user->company ? [
-                    'id' => $user->company->id,
-                    'name' => $user->company->name,
-                    'latitude' => $user->company->latitude,
-                    'longitude' => $user->company->longitude,
-                    'radius_km' => $user->company->radius_km,
-                ] : null,
-                'default_shift' => $user->shiftKerja ? [
-                    'id' => $user->shiftKerja->id,
-                    'name' => $user->shiftKerja->name,
-                    'start_time' => $user->shiftKerja->start_time,
-                    'end_time' => $user->shiftKerja->end_time,
-                ] : null,
-            ]
-        ], 200);
+        $user = User::query()->with(self::PROFILE_RELATIONS)->find($id);
+
+        if (! $user) {
+            return ApiResponse::error('Pengguna tidak ditemukan.', 404);
+        }
+
+        return ApiResponse::success(
+            ['user' => new UserResource($user)],
+            'Data pengguna berhasil dimuat.'
+        );
     }
 
-    public function updateProfile(Request $request)
+    /**
+     * Update the signed-in user's own profile. The target is always the token
+     * owner, never an id taken from the request body.
+     */
+    public function updateProfile(UpdateProfileRequest $request): JsonResponse
     {
-        try {
-            $request->validate([
-                'id' => 'required',
-                'name' => 'required',
-                'email' => 'required|email',
-                'phone' => 'required',
-                'image_url' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
-            ]);
-
-            $user = User::find($request->id);
-            $user->name = $request->name;
-            $user->email = $request->email;
-            $user->phone = $request->phone;
-            if ($request->hasFile('image')) {
-                $image = $request->file('image');
-                $image_name = time() . '.' . $image->getClientOriginalExtension();
-                $filePath = $image->storeAs('images/users', $image_name, 'public');
-                $user->image_url = $filePath;
-            }
-            $user->save();
-            return response([
-                'status' => 'Success',
-                'message' => 'Update user success',
-                'data' => $user,
-            ], 200);
-        } catch (\Throwable $th) {
-            return response([
-                'message' => $th->getMessage(),
-            ]);
-        }
-    }
-
-    public function updatePassword(Request $request)
-    {
-        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
-            'current_password' => 'required',
-            'password' => 'required|string|min:8|confirmed',
-        ], [
-            'current_password.required' => 'Password lama wajib diisi',
-            'password.required' => 'Password baru wajib diisi',
-            'password.min' => 'Password baru minimal 8 karakter',
-            'password.confirmed' => 'Konfirmasi password tidak sesuai',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => $validator->errors()->first(),
-            ], 422);
-        }
-
         $user = $request->user();
+        $validated = $request->validated();
 
-        if (!\Illuminate\Support\Facades\Hash::check($request->current_password, $user->password)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Password lama tidak sesuai',
-            ], 400);
+        $user->fill(Arr::only($validated, ['name', 'email', 'phone']));
+
+        if ($request->hasFile('image')) {
+            $previousImage = $user->image_url;
+
+            $user->image_url = $request->file('image')->storeAs(
+                'images/users',
+                $user->id.'-'.now()->format('YmdHis').'.'.($request->file('image')->extension() ?: 'jpg'),
+                'public'
+            );
+
+            if ($previousImage && $previousImage !== $user->image_url) {
+                Storage::disk('public')->delete($previousImage);
+            }
         }
 
-        $user->password = \Illuminate\Support\Facades\Hash::make($request->password);
         $user->save();
+        $user->load(self::PROFILE_RELATIONS);
 
         return response()->json([
             'success' => true,
-            'message' => 'Password berhasil diubah',
-        ], 200);
+            'message' => 'Profil berhasil diperbarui.',
+            'data' => new UserResource($user),
+            // Legacy keys kept so older app builds keep working.
+            'status' => 'Success',
+        ]);
+    }
+
+    /**
+     * Change the signed-in user's password and invalidate every other session.
+     */
+    public function updatePassword(UpdatePasswordRequest $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $user->forceFill([
+            'password' => $request->validated('password'),
+            'password_changed_at' => now(),
+        ])->save();
+
+        $currentTokenId = $request->user()->currentAccessToken()?->id;
+
+        $user->tokens()
+            ->when($currentTokenId, fn ($query) => $query->where('id', '!=', $currentTokenId))
+            ->delete();
+
+        return ApiResponse::success(
+            ['password_changed_at' => $user->password_changed_at?->toIso8601String()],
+            'Password berhasil diubah. Perangkat lain telah dikeluarkan.'
+        );
     }
 }

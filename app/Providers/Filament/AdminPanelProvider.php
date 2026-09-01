@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Models\AppSetting;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -16,6 +17,7 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Throwable;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -27,11 +29,11 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->registration()
             ->login(\App\Filament\Pages\Auth\Login::class)
-            ->brandName('AbsenDav Tech KI')
-            ->brandLogo(asset('img/logo.svg'))
-            ->darkModeBrandLogo(asset('img/logo-dark.svg'))
+            ->brandName(fn (): string => self::branding()?->app_name ?? config('app.name'))
+            ->brandLogo(fn (): string => self::branding()?->logoUrl() ?? asset('img/logo.svg'))
+            ->darkModeBrandLogo(fn (): string => self::branding()?->logoDarkUrl() ?? asset('img/logo-dark.svg'))
             ->brandLogoHeight('4rem')
-            ->favicon(asset('favicon.svg'))
+            ->favicon(fn (): string => self::branding()?->faviconUrl() ?? asset('favicon.svg'))
             ->colors([
                 'primary' => Color::Blue,
             ])
@@ -99,5 +101,18 @@ class AdminPanelProvider extends PanelProvider
                         });
                     </script>' : ''
             );
+    }
+
+    /**
+     * Branding row, resolved lazily so the panel still boots before the
+     * app_settings table exists (fresh install, migrations, CI).
+     */
+    protected static function branding(): ?AppSetting
+    {
+        try {
+            return AppSetting::current();
+        } catch (Throwable) {
+            return null;
+        }
     }
 }

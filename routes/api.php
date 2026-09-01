@@ -1,87 +1,102 @@
 <?php
 
-use Illuminate\Http\Request;
+use App\Http\Controllers\Api\AppSettingController;
+use App\Http\Controllers\Api\AttendanceController;
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CompanyController;
+use App\Http\Controllers\Api\LeaveController;
+use App\Http\Controllers\Api\NoteController;
+use App\Http\Controllers\Api\OvertimeController;
+use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/user', function (Request $request) {
-    $user = $request->user();
+/*
+|--------------------------------------------------------------------------
+| Public endpoints
+|--------------------------------------------------------------------------
+| Branding is public so the splash and login screens can render the correct
+| app name, logo and theme before a token exists.
+*/
 
-    // Load relationships
-    $user->load(['shiftKerja', 'departemen']);
+Route::get('/app-settings', [AppSettingController::class, 'show'])->name('api.app-settings');
 
-    return response([
-        'user' => $user,
-        'role' => $user->role,
-        'position' => $user->position,
-        'default_shift' => $user->shiftKerja ? [
-            'id' => $user->shiftKerja->id,
-            'name' => $user->shiftKerja->name,
-        ] : null,
-        'default_shift_detail' => $user->shiftKerja ? [
-            'id' => $user->shiftKerja->id,
-            'name' => $user->shiftKerja->name,
-            'start_time' => $user->shiftKerja->start_time,
-            'end_time' => $user->shiftKerja->end_time,
-        ] : null,
-        'department' => $user->departemen ? [
-            'id' => $user->departemen->id,
-            'name' => $user->departemen->name,
-        ] : null,
-    ], 200);
-})->middleware('auth:sanctum');
+Route::post('/login', [AuthController::class, 'login'])
+    ->middleware('throttle:20,1')
+    ->name('api.login');
 
-// login
-Route::post('/login', [App\Http\Controllers\Api\AuthController::class, 'login']);
+/*
+|--------------------------------------------------------------------------
+| Authenticated endpoints
+|--------------------------------------------------------------------------
+*/
 
-// logout
-Route::post('/logout', [App\Http\Controllers\Api\AuthController::class, 'logout'])->middleware('auth:sanctum');
+Route::middleware('auth:sanctum')->group(function () {
+    // Session
+    Route::post('/logout', [AuthController::class, 'logout'])->name('api.logout');
+    Route::post('/logout-all', [AuthController::class, 'logoutAll'])->name('api.logout-all');
+    Route::get('/me', [AuthController::class, 'me'])->name('api.me');
+    Route::get('/user', [AuthController::class, 'me'])->name('api.user');
 
-// me
-Route::get('/me', [App\Http\Controllers\Api\AuthController::class, 'me'])->middleware('auth:sanctum');
+    // Profile
+    Route::post('/update-profile', [AuthController::class, 'updateProfile'])->name('api.face.update');
+    Route::post('/update-fcm-token', [AuthController::class, 'updateFcmToken'])->name('api.fcm.update');
+    Route::get('/api-user/{id}', [UserController::class, 'getUserId'])
+        ->whereNumber('id')
+        ->name('api.user.show');
+    Route::post('/api-user/edit', [UserController::class, 'updateProfile'])->name('api.user.update');
 
-// company
-Route::get('/company', [App\Http\Controllers\Api\CompanyController::class, 'show'])->middleware('auth:sanctum');
+    // Password
+    Route::post('/api-user/update-password', [UserController::class, 'updatePassword'])
+        ->middleware('throttle:10,1')
+        ->name('api.password.update');
+    Route::post('/change-password', [UserController::class, 'updatePassword'])
+        ->middleware('throttle:10,1')
+        ->name('api.password.change');
 
-// checkin
-Route::post('/checkin', [App\Http\Controllers\Api\AttendanceController::class, 'checkin'])->middleware('auth:sanctum');
+    // Offices / map data
+    Route::get('/company', [CompanyController::class, 'show'])->name('api.company');
+    Route::get('/companies', [CompanyController::class, 'index'])->name('api.companies');
 
-// checkout
-Route::post('/checkout', [App\Http\Controllers\Api\AttendanceController::class, 'checkout'])->middleware('auth:sanctum');
+    // Attendance
+    Route::prefix('attendance')->name('api.attendance.')->group(function () {
+        Route::get('/pre-check', [AttendanceController::class, 'preCheck'])->name('pre-check');
+        Route::get('/locations', [AttendanceController::class, 'locations'])->name('locations');
+        Route::get('/today', [AttendanceController::class, 'today'])->name('today');
+        Route::get('/summary', [AttendanceController::class, 'summary'])->name('summary');
+        Route::get('/history', [AttendanceController::class, 'index'])->name('history');
+        Route::post('/check-in', [AttendanceController::class, 'checkin'])
+            ->middleware('throttle:30,1')
+            ->name('check-in');
+        Route::post('/check-out', [AttendanceController::class, 'checkout'])
+            ->middleware('throttle:30,1')
+            ->name('check-out');
+    });
 
-// is checkin
-Route::get('/is-checkin', [App\Http\Controllers\Api\AttendanceController::class, 'isCheckedin'])->middleware('auth:sanctum');
+    // Attendance aliases used by existing app builds
+    Route::post('/checkin', [AttendanceController::class, 'checkin'])->middleware('throttle:30,1');
+    Route::post('/checkout', [AttendanceController::class, 'checkout'])->middleware('throttle:30,1');
+    Route::get('/is-checkin', [AttendanceController::class, 'isCheckedin']);
+    Route::get('/api-attendances', [AttendanceController::class, 'index']);
 
-// update profile
-Route::post('/update-profile', [App\Http\Controllers\Api\AuthController::class, 'updateProfile'])->middleware('auth:sanctum');
+    // Overtime
+    Route::post('/start-overtime', [OvertimeController::class, 'startOvertime'])->name('api.overtime.start');
+    Route::post('/end-overtime', [OvertimeController::class, 'endOvertime'])->name('api.overtime.end');
+    Route::get('/overtime-status', [OvertimeController::class, 'checkTodayOvertimeStatus'])->name('api.overtime.status');
+    Route::get('/overtimes', [OvertimeController::class, 'index'])->name('api.overtime.index');
 
-// notes
-Route::apiResource('/api-notes', App\Http\Controllers\Api\NoteController::class)->middleware('auth:sanctum');
+    // Izin & cuti
+    Route::get('/leave-types', [LeaveController::class, 'getLeaveTypes'])->name('api.leave.types');
+    Route::get('/leave-balance', [LeaveController::class, 'getBalance'])->name('api.leave.balance');
+    Route::get('/leaves', [LeaveController::class, 'index'])->name('api.leave.index');
+    Route::post('/leaves', [LeaveController::class, 'store'])->name('api.leave.store');
+    Route::get('/leaves/{id}', [LeaveController::class, 'show'])->whereNumber('id')->name('api.leave.show');
+    Route::match(['put', 'post'], '/leaves/{id}', [LeaveController::class, 'update'])
+        ->whereNumber('id')
+        ->name('api.leave.update');
+    Route::post('/leaves/{id}/cancel', [LeaveController::class, 'cancel'])->whereNumber('id')->name('api.leave.cancel');
+    Route::post('/leaves/{id}/approve', [LeaveController::class, 'approve'])->whereNumber('id')->name('api.leave.approve');
+    Route::post('/leaves/{id}/reject', [LeaveController::class, 'reject'])->whereNumber('id')->name('api.leave.reject');
 
-// update fcm token
-Route::post('/update-fcm-token', [App\Http\Controllers\Api\AuthController::class, 'updateFcmToken'])->middleware('auth:sanctum');
-
-// get attendance
-Route::get('/api-attendances', [App\Http\Controllers\Api\AttendanceController::class, 'index'])->middleware('auth:sanctum');
-
-Route::get('/api-user/{id}', [App\Http\Controllers\Api\UserController::class, 'getUserId'])->middleware('auth:sanctum');
-
-// update user
-Route::post('/api-user/edit', [App\Http\Controllers\Api\UserController::class, 'updateProfile'])->middleware('auth:sanctum');
-
-// update password
-Route::post('/api-user/update-password', [App\Http\Controllers\Api\UserController::class, 'updatePassword'])->middleware('auth:sanctum');
-
-// overtime
-Route::post('/start-overtime', [App\Http\Controllers\Api\OvertimeController::class, 'startOvertime'])->middleware('auth:sanctum');
-Route::post('/end-overtime', [App\Http\Controllers\Api\OvertimeController::class, 'endOvertime'])->middleware('auth:sanctum');
-Route::get('/overtime-status', [App\Http\Controllers\Api\OvertimeController::class, 'checkTodayOvertimeStatus'])->middleware('auth:sanctum');
-Route::get('/overtimes', [App\Http\Controllers\Api\OvertimeController::class, 'index'])->middleware('auth:sanctum');
-
-// leave
-Route::get('/leave-types', [App\Http\Controllers\Api\LeaveController::class, 'getLeaveTypes'])->middleware('auth:sanctum');
-Route::get('/leave-balance', [App\Http\Controllers\Api\LeaveController::class, 'getBalance'])->middleware('auth:sanctum');
-Route::get('/leaves', [App\Http\Controllers\Api\LeaveController::class, 'index'])->middleware('auth:sanctum');
-Route::get('/leaves/{id}', [App\Http\Controllers\Api\LeaveController::class, 'show'])->middleware('auth:sanctum');
-Route::post('/leaves', [App\Http\Controllers\Api\LeaveController::class, 'store'])->middleware('auth:sanctum');
-Route::put('/leaves/{id}', [App\Http\Controllers\Api\LeaveController::class, 'update'])->middleware('auth:sanctum');
-Route::post('/leaves/{id}/cancel', [App\Http\Controllers\Api\LeaveController::class, 'cancel'])->middleware('auth:sanctum');
+    // Notes
+    Route::apiResource('/api-notes', NoteController::class);
+});

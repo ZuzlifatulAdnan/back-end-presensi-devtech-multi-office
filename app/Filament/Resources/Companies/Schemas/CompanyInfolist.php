@@ -85,8 +85,8 @@ class CompanyInfolist
                                         return sprintf(
                                             '%s: %s - %s%s (%s, %d employees)',
                                             $shift->name,
-                                            $shift->start_time->format('H:i'),
-                                            $shift->end_time->format('H:i'),
+                                            \Carbon\Carbon::parse($shift->start_time)->format('H:i'),
+                                            \Carbon\Carbon::parse($shift->end_time)->format('H:i'),
                                             $crossDay,
                                             $grace,
                                             $employees
