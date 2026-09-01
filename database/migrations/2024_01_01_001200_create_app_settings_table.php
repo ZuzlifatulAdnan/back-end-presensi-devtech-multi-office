@@ -4,6 +4,10 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
+/**
+ * White-label configuration read by the mobile app on boot: branding, feature
+ * flags, map settings and the supported app versions. Holds a single row.
+ */
 return new class extends Migration
 {
     public function up(): void

@@ -753,19 +753,28 @@ Menu lain yang berubah:
 
 ## Perubahan Database
 
-Empat migrasi baru:
+Kolom dan index yang ditambahkan fitur ini:
 
-| Migrasi | Isi |
+| Tabel | Isi |
 | --- | --- |
-| `create_app_settings_table` | Tabel pengaturan aplikasi (satu baris) |
-| `add_remote_work_fields_to_attendances_table` | `photo_in/out`, `notes_in/out`, `address_in/out`, `distance_in/out_meters`, `is_mock_location`, `work_duration_minutes`, `device_info`; **unique index `(user_id, date)`**; index `(date, status)` dan `(company_id, date)` |
-| `improve_leaves_table_for_attachments` | `attachment_name`, `attachment_mime`, `attachment_size`, `cancelled_at`; enum `status` ditambah `cancelled`; index `(employee_id, status)` dan `(start_date, end_date)` |
-| `add_company_activation_and_indexes` | `companies.is_active`, `companies.logo_path`, `users.password_changed_at` |
+| `app_settings` *(baru)* | Pengaturan aplikasi, satu baris: branding, aturan presensi, konfigurasi peta, versi minimum, maintenance |
+| `attendances` | `photo_in/out`, `notes_in/out`, `address_in/out`, `distance_in/out_meters`, `is_mock_location`, `work_duration_minutes`, `device_info`; **unique index `(user_id, date)`**; index `(date, status)` dan `(company_id, date)` |
+| `leaves` | `attachment_name`, `attachment_mime`, `attachment_size`, `cancelled_at`; enum `status` ditambah `cancelled`; index `(employee_id, status)` dan `(start_date, end_date)` |
+| `companies` | `is_active`, `logo_path`, index `is_active` |
+| `users` | `password_changed_at` |
+
+Sejak versi 2.1 seluruh migrasi sudah di-squash menjadi 15 file baseline — lihat [Struktur Migrasi](../README.md#-struktur-migrasi) di README.
 
 Cara menerapkan:
 
 ```bash
-php artisan migrate
+# Instalasi baru
+php artisan migrate --seed
+
+# Instalasi yang sudah berjalan (schema sudah ada, hanya pencatatan yang disamakan)
+php artisan db:baseline-migrations --dry-run   # tinjau dulu
+php artisan db:baseline-migrations
+
 php artisan db:seed --class=AppSettingSeeder   # opsional, mengisi nilai default
 php artisan storage:link                        # bila belum pernah dijalankan
 php artisan optimize:clear

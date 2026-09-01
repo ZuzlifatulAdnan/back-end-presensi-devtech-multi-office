@@ -109,21 +109,55 @@ _Note: Auto-fill enabled in development environment_
 
 ### 🔄 Upgrade dari Instalasi yang Sudah Berjalan
 
-Versi 2.1 menambah 4 migrasi (tabel `app_settings`, kolom WFH pada `attendances`, metadata lampiran pada `leaves`, status aktif lokasi kantor). Untuk memperbaruinya:
+Versi 2.1 menambah tabel `app_settings`, kolom WFH pada `attendances`, metadata lampiran pada `leaves`, dan status aktif lokasi kantor. **Seluruh migrasi juga sudah di-squash** dari 46 file menjadi 15 file baseline, jadi database yang sudah berjalan perlu menyamakan catatan migrasinya sekali:
 
 ```bash
+# 1. Terapkan perubahan skema (jika belum)
 php artisan migrate
 
-# Opsional: isi nilai default pengaturan aplikasi
+# 2. Samakan tabel `migrations` dengan file baseline yang baru.
+#    Perintah ini HANYA menulis baris pencatatan, skema & data tidak disentuh.
+php artisan db:baseline-migrations --dry-run   # tinjau perubahannya dulu
+php artisan db:baseline-migrations
+
+# 3. Opsional: isi nilai default pengaturan aplikasi
 php artisan db:seed --class=AppSettingSeeder
 
-# Wajib bila belum pernah dijalankan, agar foto & lampiran bisa diakses aplikasi
+# 4. Wajib bila belum pernah dijalankan, agar foto & lampiran bisa diakses aplikasi
 php artisan storage:link
 
 php artisan optimize:clear
 ```
 
+Setelah langkah 2, `php artisan migrate` akan menjawab `Nothing to migrate`. Tanpa langkah itu, Laravel akan mencoba menjalankan ulang migrasi baseline dan gagal dengan _table already exists_.
+
 Data lama tetap utuh dan seluruh endpoint lama tetap berfungsi — lihat [Catatan Upgrade Aplikasi Lama](docs/api-fitur-baru.md#catatan-upgrade-aplikasi-lama) sebelum merilis versi aplikasi mobile berikutnya.
+
+### 🗂️ Struktur Migrasi
+
+Migrasi disusun per domain dan dijalankan berurutan. Instalasi baru cukup `php artisan migrate --seed`.
+
+| Urutan | File | Tabel |
+| ------ | ---- | ----- |
+| 1 | `0001_01_01_000000_create_users_table` | `users`, `password_reset_tokens`, `sessions` |
+| 2 | `0001_01_01_000001_create_cache_table` | `cache`, `cache_locks` |
+| 3 | `0001_01_01_000002_create_jobs_table` | `jobs`, `job_batches`, `failed_jobs` |
+| 4 | `2024_01_01_000100_create_personal_access_tokens_table` | `personal_access_tokens` |
+| 5 | `2024_01_01_000200_create_companies_table` | `companies` |
+| 6 | `2024_01_01_000300_create_organization_tables` | `jabatans`, `departemens`, `jabatan_user`, `departemen_user` |
+| 7 | `2024_01_01_000400_create_shift_tables` | `shift_kerjas`, `shift_kerja_user`, `shift_assignments` |
+| 8 | `2024_01_01_000500_add_foreign_keys_to_users_table` | FK `users` → jabatan / departemen / shift / company |
+| 9 | `2024_01_01_000600_create_attendances_table` | `attendances` |
+| 10 | `2024_01_01_000700_create_holidays_table` | `holidays` |
+| 11 | `2024_01_01_000800_create_leave_tables` | `leave_types`, `leave_balances`, `leaves` |
+| 12 | `2024_01_01_000900_create_overtimes_table` | `overtimes` |
+| 13 | `2024_01_01_001000_create_legacy_permission_tables` | `permissions`, `qr_absens` (legacy, tanpa model) |
+| 14 | `2024_01_01_001100_create_notes_table` | `notes` |
+| 15 | `2024_01_01_001200_create_app_settings_table` | `app_settings` |
+
+`users` dibuat lebih dulu karena banyak paket mengasumsikan tabel itu ada, sehingga foreign key-nya baru dipasang pada langkah 8 setelah tabel tujuannya terbentuk.
+
+Riwayat 46 migrasi inkremental sebelumnya tetap tersimpan di git (commit `f68d62b` dan sebelumnya) bila sewaktu-waktu perlu ditelusuri.
 
 ---
 
@@ -1292,6 +1326,7 @@ This project is licensed under the MIT License.
 -   ✅ Deteksi fake GPS, blokir presensi saat cuti disetujui, penanganan shift lintas hari
 -   ✅ Format respons API seragam `{success, message, data, meta}` (kompatibel dengan build lama)
 -   ✅ Rate limiting login/presensi/ubah password, index database baru, dan caching pengaturan & lokasi
+-   ✅ Migrasi di-squash dari 46 file menjadi 15 file baseline per domain (skema akhir identik: 267 kolom, 65 index, 24 foreign key), plus perintah `db:baseline-migrations` untuk instalasi yang sudah berjalan
 -   ✅ Perbaikan keamanan: `api-user/edit` tidak lagi menerima `id` dari body, detail izin dibatasi pemilik
 -   ✅ Perbaikan bug: status `cancelled` pada izin, `early_leave_minutes` yang tidak pernah terisi, duplikat presensi
 
