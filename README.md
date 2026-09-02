@@ -132,7 +132,20 @@ php artisan storage:link
 php artisan optimize:clear
 ```
 
-Urutannya penting. Tanpa langkah 1, Laravel akan mencoba menjalankan ulang migrasi baseline dan gagal dengan _table already exists_ karena tabelnya sudah ada.
+**Urutannya penting.** Tanpa langkah 1, Laravel mencoba menjalankan ulang migrasi baseline dan gagal:
+
+```
+2024_01_01_000100_create_personal_access_tokens_table ......... FAIL
+SQLSTATE[42S01]: Base table or view already exists: 1050
+Table 'personal_access_tokens' already exists
+```
+
+Kalau ini terjadi, tidak ada yang rusak — `migrate` berhenti sebelum sempat mengubah apa pun. Jalankan `php artisan db:baseline-migrations`, lalu `php artisan migrate` lagi.
+
+Dua hal yang dilakukan `db:baseline-migrations`:
+
+1. Hanya menandai **15 migrasi baseline** sebagai sudah dijalankan. Migrasi perapian (`2026_09_02_*`) sengaja dibiarkan tertunda supaya benar-benar dijalankan oleh `php artisan migrate` di langkah 2.
+2. Memeriksa dulu apakah skema database sudah selengkap baseline. Kalau ada tabel atau kolom yang belum ada, perintahnya **menolak** dan menunjukkan cara membawa database ke versi baseline lebih dulu — supaya tidak ada migrasi yang ditandai "sudah jalan" padahal tabelnya belum pernah dibuat.
 
 **Data tidak hilang.** Sebelum menghapus tabel pivot, migrasi menyalin penugasan yang belum tercatat di `users`, dan seluruh isi 5 tabel legacy dicadangkan ke `storage/app/backups/legacy-tables-*.sql`. Perubahan tipe kolom mengonversi nilai yang ada, tidak menghapusnya. Ini sudah diverifikasi pada klon database asli: 23 tabel jumlah barisnya tidak berubah, isi `users` dan `companies` identik, agregat `attendances` (787 baris) dan `leaves` (10 baris) identik.
 

@@ -37,6 +37,15 @@ return new class extends Migration
             $table->index('status', 'overtimes_status_index');
         });
 
+        // The composite index above already covers the foreign key. MySQL drops
+        // the implicit index it created itself, but one that came back from a
+        // mysqldump is an explicit index and stays behind as a duplicate.
+        if ($this->hasIndex('overtimes', 'overtimes_user_id_foreign')) {
+            Schema::table('overtimes', function (Blueprint $table) {
+                $table->dropIndex('overtimes_user_id_foreign');
+            });
+        }
+
         Schema::table('leaves', function (Blueprint $table) {
             $table->index('status', 'leaves_status_index');
         });
