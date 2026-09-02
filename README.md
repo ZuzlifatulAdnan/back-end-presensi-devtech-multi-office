@@ -109,7 +109,7 @@ _Note: Auto-fill enabled in development environment_
 
 ### 🔄 Upgrade dari Instalasi yang Sudah Berjalan
 
-Versi 2.1 menambah tabel `app_settings`, kolom WFH pada `attendances`, metadata lampiran pada `leaves`, dan status aktif lokasi kantor. **Seluruh migrasi juga di-squash** dari 46 file menjadi 15 file baseline, lalu ditambah 3 migrasi perapian database.
+Versi 2.1 menambah tabel `app_settings`, kolom WFH pada `attendances`, metadata lampiran pada `leaves`, dan status aktif lokasi kantor. **Seluruh migrasi juga di-squash** dari 46 file menjadi 15 file baseline, lalu ditambah 4 migrasi perapian database.
 
 ```bash
 # 0. Backup dulu — perapian menghapus 5 tabel legacy
@@ -144,10 +144,10 @@ Kalau ini terjadi, tidak ada yang rusak — `migrate` berhenti sebelum sempat me
 
 Dua hal yang dilakukan `db:baseline-migrations`:
 
-1. Hanya menandai **15 migrasi baseline** sebagai sudah dijalankan. Migrasi perapian (`2026_09_02_*`) sengaja dibiarkan tertunda supaya benar-benar dijalankan oleh `php artisan migrate` di langkah 2.
-2. Memeriksa dulu apakah skema database sudah selengkap baseline. Kalau ada tabel atau kolom yang belum ada, perintahnya **menolak** dan menunjukkan cara membawa database ke versi baseline lebih dulu — supaya tidak ada migrasi yang ditandai "sudah jalan" padahal tabelnya belum pernah dibuat.
+1. Hanya menandai **15 migrasi baseline** sebagai sudah dijalankan. Keempat migrasi perapian (`2026_09_02_*`) sengaja dibiarkan tertunda supaya benar-benar dijalankan oleh `php artisan migrate` di langkah 2.
+2. Memeriksa dulu apakah skema database sudah mencapai rilis inkremental terakhir sebelum squash. Kekurangan setelah titik itu ditambal oleh migrasi `2026_09_02_000000`; kalau yang kurang lebih mendasar dari itu, perintahnya **menolak** dan menunjukkan cara membawa database maju lebih dulu — supaya tidak ada migrasi yang ditandai "sudah jalan" padahal tabelnya belum pernah dibuat.
 
-**Data tidak hilang.** Sebelum menghapus tabel pivot, migrasi menyalin penugasan yang belum tercatat di `users`, dan seluruh isi 5 tabel legacy dicadangkan ke `storage/app/backups/legacy-tables-*.sql`. Perubahan tipe kolom mengonversi nilai yang ada, tidak menghapusnya. Ini sudah diverifikasi pada klon database asli: 23 tabel jumlah barisnya tidak berubah, isi `users` dan `companies` identik, agregat `attendances` (787 baris) dan `leaves` (10 baris) identik.
+**Data tidak hilang.** Sebelum menghapus tabel pivot, migrasi menyalin penugasan yang belum tercatat di `users`, dan isinya dicadangkan ke `storage/app/backups/`. Perubahan tipe kolom mengonversi nilai yang ada, tidak menghapusnya. Diverifikasi pada klon database produksi (1.874 absensi, 270 cuti, 9 pegawai): semua tabel jumlah barisnya tetap, kecuali 3 baris presensi duplikat yang memang sampah dan sudah dicadangkan lebih dulu.
 
 Data lama tetap utuh dan seluruh endpoint lama tetap berfungsi — lihat [Catatan Upgrade Aplikasi Lama](docs/api-fitur-baru.md#catatan-upgrade-aplikasi-lama) sebelum merilis versi aplikasi mobile berikutnya.
 
@@ -172,13 +172,18 @@ Migrasi disusun per domain dan dijalankan berurutan. Instalasi baru cukup `php a
 | 13 | `2024_01_01_001000_create_legacy_permission_tables` | `permissions`, `qr_absens` (legacy, tanpa model) |
 | 14 | `2024_01_01_001100_create_notes_table` | `notes` |
 | 15 | `2024_01_01_001200_create_app_settings_table` | `app_settings` |
-| 16 | `2026_09_02_000100_drop_legacy_tables` | **DROP** `permissions`, `qr_absens`, `jabatan_user`, `departemen_user`, `shift_kerja_user` |
-| 17 | `2026_09_02_000200_normalize_column_types` | **MODIFY** tipe kolom koordinat, default `users.role`, menit jadi unsigned |
-| 18 | `2026_09_02_000300_add_missing_indexes_and_constraints` | **ADD** foreign key `sessions.user_id` + index untuk filter panel admin |
+| 16 | `2026_09_02_000000_catch_up_pre_baseline_schema` | **ADD** kolom & tabel yang belum ada di database lama (idempoten, dilewati kalau sudah lengkap) |
+| 17 | `2026_09_02_000100_drop_legacy_tables` | **DROP** `permissions`, `qr_absens`, `jabatan_user`, `departemen_user`, `shift_kerja_user` |
+| 18 | `2026_09_02_000200_normalize_column_types` | **MODIFY** tipe kolom koordinat, `work_mode` jadi enum, default `users.role`, menit jadi unsigned |
+| 19 | `2026_09_02_000300_add_missing_indexes_and_constraints` | **ADD** foreign key `sessions.user_id` + index untuk filter panel admin |
 
 `users` dibuat lebih dulu karena banyak paket mengasumsikan tabel itu ada, sehingga foreign key-nya baru dipasang pada langkah 8 setelah tabel tujuannya terbentuk.
 
-Langkah 1–15 adalah baseline hasil squash (bentuk skema per September 2026), langkah 16–18 adalah perapian yang benar-benar mengubah database dengan perintah `drop` / `change` / `index`. Instalasi baru menjalankan keduanya berurutan sehingga hasil akhirnya sama persis dengan database yang di-upgrade — sudah diverifikasi: 236 kolom, 59 index, 18 foreign key, identik.
+Langkah 1–15 adalah baseline hasil squash, langkah 16–19 adalah perapian yang benar-benar mengubah database dengan perintah `drop` / `change` / `index`.
+
+Langkah 16 adalah jembatan untuk database yang lebih tua dari baseline: ia menambahkan kolom dan tabel yang belum ada satu per satu (`if (! Schema::hasColumn(...))`), jadi pada instalasi baru — yang baselinenya sudah membuat semuanya — setiap langkahnya dilewati tanpa efek.
+
+Hasil akhir kedua jalur identik, sudah diverifikasi pada klon database produksi: **236 kolom, 58 index, 18 foreign key**, tanpa satu pun perbedaan.
 
 Riwayat 46 migrasi inkremental sebelumnya tetap tersimpan di git (commit `f68d62b` dan sebelumnya) bila sewaktu-waktu perlu ditelusuri.
 
@@ -186,15 +191,22 @@ Riwayat 46 migrasi inkremental sebelumnya tetap tersimpan di git (commit `f68d62
 
 | Perintah | Objek | Alasan |
 | -------- | ----- | ------ |
+| `ADD` | Kolom WFH pada `attendances`, metadata lampiran pada `leaves`, `companies.is_active`, `users.password_changed_at`, tabel `app_settings` | Melengkapi database yang belum menerima rilis fitur WFH |
 | `DROP` | `permissions`, `qr_absens` | Fitur izin & QR versi pertama, sudah digantikan `leaves` dan alur GPS/foto. Keduanya kosong (0 baris) |
 | `DROP` | `jabatan_user`, `departemen_user`, `shift_kerja_user` | Digantikan kolom `jabatan_id` / `departemen_id` / `shift_kerja_id` di `users`. Migrasi menyalin dulu penugasan yang belum ada di `users` sebelum tabelnya dihapus, dan isinya sudah dicadangkan ke `storage/app/backups/legacy-tables-*.sql` |
 | `MODIFY` | `companies.latitude`, `longitude` → `decimal(10,7)`; `radius_km` → `decimal(6,2)` | Sebelumnya `varchar`, sehingga nilai non-numerik bisa tersimpan dan setiap perhitungan jarak harus casting |
 | `MODIFY` | `users.role` default `user` → `employee` | Nilai default lama tidak pernah dipakai (data asli: admin/manager/employee) |
+| `MODIFY` | `attendances.work_mode` `varchar` → `enum('wfo','wfh','wfa')`, `users.work_mode` jadi NOT NULL | Kolom teks bebas bisa menerima nilai yang tidak dikenal aplikasi |
 | `MODIFY` | `attendances.late_minutes`, `early_leave_minutes` → `unsigned` | Menit keterlambatan tidak mungkin negatif |
 | `ADD` | Foreign key `sessions.user_id` → `users` (cascade) | Sesi ikut terhapus saat pegawai dihapus. Baris yatim di-null-kan lebih dulu |
 | `ADD` | Index `users.role`, `users.work_mode`, `attendances.work_mode`, `overtimes(user_id, date)`, `overtimes.status`, `leaves.status` | Filter yang dipakai panel admin dan API |
 
-Ketiganya reversible — `php artisan migrate:rollback --step=3` sudah diuji dan mengembalikan struktur tabel yang dihapus (isinya dipulihkan dari file cadangan SQL).
+Migrasi ini juga membereskan data yang menghalangi aturan baru:
+
+- **Duplikat presensi.** Alur check-out versi lama kadang membuat check-in kedua di hari yang sama (baris tanpa `time_out`, dengan hitungan terlambat tidak masuk akal), padahal check-out aslinya tercatat di baris yang benar beberapa detik kemudian. Baris seperti ini dibuang agar unique index `(user_id, date)` bisa dibuat — dan dicadangkan lebih dulu ke `storage/app/backups/attendances-dihapus-*.sql`. Di database produksi ada 3 baris seperti ini dari 1.874.
+- **`early_leave_minutes` negatif.** Rumus lama menghitung terbalik sehingga pegawai yang pulang setelah jam shift mendapat nilai minus. Nilainya dijadikan 0 sebelum kolomnya jadi `unsigned`. Di produksi ada 41 baris.
+
+`php artisan migrate:rollback --step=3` mengembalikan langkah 17–19 (struktur tabel yang dihapus kembali dibuat; isinya dipulihkan dari file cadangan SQL). Langkah 16 sengaja tidak punya `down()` karena bersifat menambal dan strukturnya dimiliki migrasi baseline.
 
 ---
 

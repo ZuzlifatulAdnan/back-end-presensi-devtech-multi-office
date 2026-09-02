@@ -37,14 +37,7 @@ return new class extends Migration
             $table->index('status', 'overtimes_status_index');
         });
 
-        // The composite index above already covers the foreign key. MySQL drops
-        // the implicit index it created itself, but one that came back from a
-        // mysqldump is an explicit index and stays behind as a duplicate.
-        if ($this->hasIndex('overtimes', 'overtimes_user_id_foreign')) {
-            Schema::table('overtimes', function (Blueprint $table) {
-                $table->dropIndex('overtimes_user_id_foreign');
-            });
-        }
+        $this->dropRedundantForeignKeyIndexes();
 
         Schema::table('leaves', function (Blueprint $table) {
             $table->index('status', 'leaves_status_index');
@@ -85,6 +78,43 @@ return new class extends Migration
         Schema::table('sessions', function (Blueprint $table) {
             $table->dropForeign(['user_id']);
         });
+    }
+
+    /**
+     * Single-column indexes MySQL created for a foreign key, now covered by a
+     * composite index that starts with the same column.
+     *
+     * On a database built by migrations MySQL removes these itself once the
+     * wider index exists. One restored from a mysqldump carries them as
+     * explicitly declared indexes, so they linger as duplicates.
+     */
+    private function dropRedundantForeignKeyIndexes(): void
+    {
+        $redundant = [
+            // index name => the wider index that already covers the foreign key
+            'attendances' => [
+                'attendances_user_id_foreign' => 'attendances_user_id_date_unique',
+                'attendances_company_id_foreign' => 'attendances_company_id_date_index',
+            ],
+            'leaves' => [
+                'leaves_employee_id_foreign' => 'leaves_employee_id_status_index',
+            ],
+            'overtimes' => [
+                'overtimes_user_id_foreign' => 'overtimes_user_id_date_index',
+            ],
+        ];
+
+        foreach ($redundant as $table => $indexes) {
+            foreach ($indexes as $index => $coveredBy) {
+                if (! $this->hasIndex($table, $index) || ! $this->hasIndex($table, $coveredBy)) {
+                    continue;
+                }
+
+                Schema::table($table, function (Blueprint $blueprint) use ($index) {
+                    $blueprint->dropIndex($index);
+                });
+            }
+        }
     }
 
     private function hasIndex(string $table, string $index): bool

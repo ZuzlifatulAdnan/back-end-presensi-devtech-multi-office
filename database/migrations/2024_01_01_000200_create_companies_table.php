@@ -24,7 +24,7 @@ return new class extends Migration
             $table->string('longitude');
             $table->string('radius_km');
 
-            $table->string('attendance_type')->nullable();
+            $table->string('attendance_type')->nullable()->default('location_based_only');
             $table->boolean('is_active')->default(true);
             $table->string('logo_path')->nullable();
 

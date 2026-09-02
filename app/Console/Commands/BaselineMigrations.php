@@ -180,23 +180,26 @@ class BaselineMigrations extends Command
     }
 
     /**
-     * Tables and columns the baseline migrations are expected to have created.
+     * The schema a database must already have before its migration history can
+     * be rewritten to the baseline.
      *
-     * Marking a migration as run without its schema being present would leave
-     * the database permanently missing those objects, so anything absent here
-     * means this database is older than the baseline.
+     * This is the state as of the last incremental release, not the full
+     * baseline: anything added after it is filled in by the catch-up migration
+     * `2026_09_02_000000`, which runs right after this command. Objects listed
+     * here have no such catch-up, so a database missing them is genuinely too
+     * old and must be brought forward with the pre-squash code first.
      *
      * @var array<string, array<int, string>>
      */
     private const BASELINE_SIGNATURE = [
-        'users' => ['work_mode', 'company_id', 'password_changed_at', 'shift_kerja_id'],
-        'companies' => ['is_active', 'logo_path', 'attendance_type'],
-        'attendances' => ['work_mode', 'photo_in', 'notes_in', 'distance_in_meters', 'company_id'],
-        'leaves' => ['attachment_url', 'attachment_name', 'cancelled_at'],
+        'users' => ['work_mode', 'company_id', 'shift_kerja_id', 'jabatan_id', 'departemen_id'],
+        'companies' => ['attendance_type', 'latitude', 'radius_km'],
+        'attendances' => ['work_mode', 'company_id', 'shift_id', 'late_minutes'],
+        'leaves' => ['attachment_url', 'approved_by', 'total_days'],
         'leave_balances' => ['remaining_days'],
         'shift_assignments' => ['shift_id'],
+        'shift_kerjas' => ['is_cross_day', 'grace_period_minutes'],
         'holidays' => ['type'],
-        'app_settings' => ['app_name', 'wfh_enabled', 'map_default_zoom'],
         'overtimes' => ['approved_by'],
         'notes' => ['note'],
         'personal_access_tokens' => ['token'],
