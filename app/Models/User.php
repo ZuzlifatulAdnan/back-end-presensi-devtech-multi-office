@@ -87,22 +87,6 @@ class User extends Authenticatable implements FilamentUser
         return $this->belongsTo(\App\Models\ShiftKerja::class, 'shift_kerja_id');
     }
 
-    // Legacy many-to-many relationships (deprecated, for backward compatibility)
-    public function jabatans()
-    {
-        return $this->belongsToMany(\App\Models\Jabatan::class, 'jabatan_user');
-    }
-
-    public function departemens()
-    {
-        return $this->belongsToMany(\App\Models\Departemen::class, 'departemen_user');
-    }
-
-    public function shiftKerjas()
-    {
-        return $this->belongsToMany(\App\Models\ShiftKerja::class, 'shift_kerja_user');
-    }
-
     public function overtimes()
     {
         return $this->hasMany(\App\Models\Overtime::class);

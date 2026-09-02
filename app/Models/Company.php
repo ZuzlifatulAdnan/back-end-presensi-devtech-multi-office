@@ -28,6 +28,9 @@ class Company extends Model
     protected function casts(): array
     {
         return [
+            'latitude' => 'float',
+            'longitude' => 'float',
+            'radius_km' => 'float',
             'is_active' => 'boolean',
         ];
     }
@@ -53,9 +56,15 @@ class Company extends Model
         return $query->where('is_active', true);
     }
 
+    /**
+     * Reads the stored values rather than the casts: an empty string would come
+     * back from the float cast as 0.0, which is a real coordinate in the Gulf
+     * of Guinea and would silently pass a geofence check.
+     */
     public function hasCoordinates(): bool
     {
-        return is_numeric($this->latitude) && is_numeric($this->longitude);
+        return is_numeric($this->attributes['latitude'] ?? null)
+            && is_numeric($this->attributes['longitude'] ?? null);
     }
 
     /**

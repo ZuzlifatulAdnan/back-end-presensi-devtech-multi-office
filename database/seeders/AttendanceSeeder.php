@@ -15,7 +15,7 @@ class AttendanceSeeder extends Seeder
      */
     public function run(): void
     {
-        $users = User::with(['shiftKerja', 'shiftKerjas'])->get();
+        $users = User::with('shiftKerja')->get();
         $shifts = ShiftKerja::all();
 
         if ($users->isEmpty() || $shifts->isEmpty()) {
@@ -31,7 +31,6 @@ class AttendanceSeeder extends Seeder
 
         foreach ($users as $user) {
             $shift = $user->shiftKerja
-                ?? $user->shiftKerjas->first()
                 ?? $shifts->first();
 
             foreach ($flowTypes as $flowType) {
@@ -97,7 +96,7 @@ class AttendanceSeeder extends Seeder
             'time_out' => $checkOut,
             'status' => 'on_time',
             'late_minutes' => 0,
-            'early_leave_minutes' => $shiftEnd->diffInMinutes($checkOut),
+            'early_leave_minutes' => $this->earlyLeaveMinutes($shiftEnd, $checkOut),
         ];
     }
 
@@ -112,7 +111,7 @@ class AttendanceSeeder extends Seeder
             'time_out' => $checkOut,
             'status' => 'late',
             'late_minutes' => $lateMinutes,
-            'early_leave_minutes' => $shiftEnd->diffInMinutes($checkOut),
+            'early_leave_minutes' => $this->earlyLeaveMinutes($shiftEnd, $checkOut),
         ];
     }
 
@@ -143,5 +142,16 @@ class AttendanceSeeder extends Seeder
             'late_minutes' => 0,
             'early_leave_minutes' => $earlyLeave,
         ];
+    }
+
+    /**
+     * Minutes left before the shift ended. Leaving after the shift end is not
+     * early leave, so the value never goes below zero.
+     */
+    private function earlyLeaveMinutes(Carbon $shiftEnd, Carbon $checkOut): int
+    {
+        return $checkOut->lessThan($shiftEnd)
+            ? (int) $checkOut->diffInMinutes($shiftEnd)
+            : 0;
     }
 }

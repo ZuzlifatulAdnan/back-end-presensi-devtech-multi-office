@@ -20,11 +20,6 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             CompanySeeder::class,
 
-            // Pivot table seeders - must run after the main tables are seeded
-            DepartemenUserSeeder::class,
-            JabatanUserSeeder::class,
-            ShiftKerjaUserSeeder::class,
-
             // Leave management seeders
             LeaveTypeSeeder::class,
             LeaveTestingSeeder::class,

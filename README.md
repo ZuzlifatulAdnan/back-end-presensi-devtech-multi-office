@@ -109,16 +109,19 @@ _Note: Auto-fill enabled in development environment_
 
 ### 🔄 Upgrade dari Instalasi yang Sudah Berjalan
 
-Versi 2.1 menambah tabel `app_settings`, kolom WFH pada `attendances`, metadata lampiran pada `leaves`, dan status aktif lokasi kantor. **Seluruh migrasi juga sudah di-squash** dari 46 file menjadi 15 file baseline, jadi database yang sudah berjalan perlu menyamakan catatan migrasinya sekali:
+Versi 2.1 menambah tabel `app_settings`, kolom WFH pada `attendances`, metadata lampiran pada `leaves`, dan status aktif lokasi kantor. **Seluruh migrasi juga di-squash** dari 46 file menjadi 15 file baseline, lalu ditambah 3 migrasi perapian database.
 
 ```bash
-# 1. Terapkan perubahan skema (jika belum)
-php artisan migrate
+# 0. Backup dulu — perapian menghapus 5 tabel legacy
+mysqldump -u root -p nama_database > backup-sebelum-upgrade.sql
 
-# 2. Samakan tabel `migrations` dengan file baseline yang baru.
+# 1. Samakan tabel `migrations` dengan file baseline yang baru.
 #    Perintah ini HANYA menulis baris pencatatan, skema & data tidak disentuh.
 php artisan db:baseline-migrations --dry-run   # tinjau perubahannya dulu
 php artisan db:baseline-migrations
+
+# 2. Jalankan migrasi perapian (drop / modify / add)
+php artisan migrate
 
 # 3. Opsional: isi nilai default pengaturan aplikasi
 php artisan db:seed --class=AppSettingSeeder
@@ -129,7 +132,9 @@ php artisan storage:link
 php artisan optimize:clear
 ```
 
-Setelah langkah 2, `php artisan migrate` akan menjawab `Nothing to migrate`. Tanpa langkah itu, Laravel akan mencoba menjalankan ulang migrasi baseline dan gagal dengan _table already exists_.
+Urutannya penting. Tanpa langkah 1, Laravel akan mencoba menjalankan ulang migrasi baseline dan gagal dengan _table already exists_ karena tabelnya sudah ada.
+
+**Data tidak hilang.** Sebelum menghapus tabel pivot, migrasi menyalin penugasan yang belum tercatat di `users`, dan seluruh isi 5 tabel legacy dicadangkan ke `storage/app/backups/legacy-tables-*.sql`. Perubahan tipe kolom mengonversi nilai yang ada, tidak menghapusnya. Ini sudah diverifikasi pada klon database asli: 23 tabel jumlah barisnya tidak berubah, isi `users` dan `companies` identik, agregat `attendances` (787 baris) dan `leaves` (10 baris) identik.
 
 Data lama tetap utuh dan seluruh endpoint lama tetap berfungsi — lihat [Catatan Upgrade Aplikasi Lama](docs/api-fitur-baru.md#catatan-upgrade-aplikasi-lama) sebelum merilis versi aplikasi mobile berikutnya.
 
@@ -154,10 +159,29 @@ Migrasi disusun per domain dan dijalankan berurutan. Instalasi baru cukup `php a
 | 13 | `2024_01_01_001000_create_legacy_permission_tables` | `permissions`, `qr_absens` (legacy, tanpa model) |
 | 14 | `2024_01_01_001100_create_notes_table` | `notes` |
 | 15 | `2024_01_01_001200_create_app_settings_table` | `app_settings` |
+| 16 | `2026_09_02_000100_drop_legacy_tables` | **DROP** `permissions`, `qr_absens`, `jabatan_user`, `departemen_user`, `shift_kerja_user` |
+| 17 | `2026_09_02_000200_normalize_column_types` | **MODIFY** tipe kolom koordinat, default `users.role`, menit jadi unsigned |
+| 18 | `2026_09_02_000300_add_missing_indexes_and_constraints` | **ADD** foreign key `sessions.user_id` + index untuk filter panel admin |
 
 `users` dibuat lebih dulu karena banyak paket mengasumsikan tabel itu ada, sehingga foreign key-nya baru dipasang pada langkah 8 setelah tabel tujuannya terbentuk.
 
+Langkah 1–15 adalah baseline hasil squash (bentuk skema per September 2026), langkah 16–18 adalah perapian yang benar-benar mengubah database dengan perintah `drop` / `change` / `index`. Instalasi baru menjalankan keduanya berurutan sehingga hasil akhirnya sama persis dengan database yang di-upgrade — sudah diverifikasi: 236 kolom, 59 index, 18 foreign key, identik.
+
 Riwayat 46 migrasi inkremental sebelumnya tetap tersimpan di git (commit `f68d62b` dan sebelumnya) bila sewaktu-waktu perlu ditelusuri.
+
+#### Perapian pada langkah 16–18
+
+| Perintah | Objek | Alasan |
+| -------- | ----- | ------ |
+| `DROP` | `permissions`, `qr_absens` | Fitur izin & QR versi pertama, sudah digantikan `leaves` dan alur GPS/foto. Keduanya kosong (0 baris) |
+| `DROP` | `jabatan_user`, `departemen_user`, `shift_kerja_user` | Digantikan kolom `jabatan_id` / `departemen_id` / `shift_kerja_id` di `users`. Migrasi menyalin dulu penugasan yang belum ada di `users` sebelum tabelnya dihapus, dan isinya sudah dicadangkan ke `storage/app/backups/legacy-tables-*.sql` |
+| `MODIFY` | `companies.latitude`, `longitude` → `decimal(10,7)`; `radius_km` → `decimal(6,2)` | Sebelumnya `varchar`, sehingga nilai non-numerik bisa tersimpan dan setiap perhitungan jarak harus casting |
+| `MODIFY` | `users.role` default `user` → `employee` | Nilai default lama tidak pernah dipakai (data asli: admin/manager/employee) |
+| `MODIFY` | `attendances.late_minutes`, `early_leave_minutes` → `unsigned` | Menit keterlambatan tidak mungkin negatif |
+| `ADD` | Foreign key `sessions.user_id` → `users` (cascade) | Sesi ikut terhapus saat pegawai dihapus. Baris yatim di-null-kan lebih dulu |
+| `ADD` | Index `users.role`, `users.work_mode`, `attendances.work_mode`, `overtimes(user_id, date)`, `overtimes.status`, `leaves.status` | Filter yang dipakai panel admin dan API |
+
+Ketiganya reversible — `php artisan migrate:rollback --step=3` sudah diuji dan mengembalikan struktur tabel yang dihapus (isinya dipulihkan dari file cadangan SQL).
 
 ---
 
@@ -1326,7 +1350,8 @@ This project is licensed under the MIT License.
 -   ✅ Deteksi fake GPS, blokir presensi saat cuti disetujui, penanganan shift lintas hari
 -   ✅ Format respons API seragam `{success, message, data, meta}` (kompatibel dengan build lama)
 -   ✅ Rate limiting login/presensi/ubah password, index database baru, dan caching pengaturan & lokasi
--   ✅ Migrasi di-squash dari 46 file menjadi 15 file baseline per domain (skema akhir identik: 267 kolom, 65 index, 24 foreign key), plus perintah `db:baseline-migrations` untuk instalasi yang sudah berjalan
+-   ✅ Migrasi di-squash dari 46 file menjadi 15 file baseline per domain, plus perintah `db:baseline-migrations` untuk instalasi yang sudah berjalan
+-   ✅ Perapian database: drop 5 tabel legacy, koordinat `varchar` → `decimal`, menit keterlambatan jadi `unsigned`, foreign key `sessions.user_id`, dan 6 index baru — diverifikasi tanpa kehilangan data
 -   ✅ Perbaikan keamanan: `api-user/edit` tidak lagi menerima `id` dari body, detail izin dibatasi pemilik
 -   ✅ Perbaikan bug: status `cancelled` pada izin, `early_leave_minutes` yang tidak pernah terisi, duplikat presensi
 

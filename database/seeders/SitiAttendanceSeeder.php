@@ -23,7 +23,7 @@ class SitiAttendanceSeeder extends Seeder
             return;
         }
 
-        $shift = $siti->shiftKerja ?? $siti->shiftKerjas->first() ?? ShiftKerja::first();
+        $shift = $siti->shiftKerja ?? ShiftKerja::first();
 
         if (! $shift) {
             $this->command->warn('No shift found for Siti');

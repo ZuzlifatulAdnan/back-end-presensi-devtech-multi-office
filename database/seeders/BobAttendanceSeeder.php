@@ -23,7 +23,7 @@ class BobAttendanceSeeder extends Seeder
             return;
         }
 
-        $shift = $bob->shiftKerja ?? $bob->shiftKerjas->first() ?? ShiftKerja::first();
+        $shift = $bob->shiftKerja ?? ShiftKerja::first();
 
         if (! $shift) {
             $this->command->warn('No shift found for Bob');

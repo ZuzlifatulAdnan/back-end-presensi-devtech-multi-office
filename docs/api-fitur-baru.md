@@ -763,7 +763,12 @@ Kolom dan index yang ditambahkan fitur ini:
 | `companies` | `is_active`, `logo_path`, index `is_active` |
 | `users` | `password_changed_at` |
 
-Sejak versi 2.1 seluruh migrasi sudah di-squash menjadi 15 file baseline — lihat [Struktur Migrasi](../README.md#-struktur-migrasi) di README.
+Sejak versi 2.1 seluruh migrasi di-squash menjadi 15 file baseline, ditambah 3 migrasi perapian (drop tabel legacy, koordinat jadi `decimal`, index & foreign key baru) — lihat [Struktur Migrasi](../README.md#-struktur-migrasi) di README.
+
+Perubahan yang memengaruhi respons API:
+
+- `companies.latitude` / `longitude` / `radius_km` sekarang bertipe `decimal`, sehingga selalu dikirim sebagai **angka**, bukan string.
+- Tabel `permissions` dan `qr_absens` dihapus. Endpoint `/api/api-permissions` dan `/api/check-qr` memang sudah tidak ada sejak versi 2.0 — gunakan `/api/leaves`.
 
 Cara menerapkan:
 
@@ -771,9 +776,11 @@ Cara menerapkan:
 # Instalasi baru
 php artisan migrate --seed
 
-# Instalasi yang sudah berjalan (schema sudah ada, hanya pencatatan yang disamakan)
-php artisan db:baseline-migrations --dry-run   # tinjau dulu
+# Instalasi yang sudah berjalan
+mysqldump -u root -p nama_database > backup.sql   # backup dulu
+php artisan db:baseline-migrations --dry-run       # samakan pencatatan, tinjau dulu
 php artisan db:baseline-migrations
+php artisan migrate                                # jalankan perapian
 
 php artisan db:seed --class=AppSettingSeeder   # opsional, mengisi nilai default
 php artisan storage:link                        # bila belum pernah dijalankan
